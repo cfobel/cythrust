@@ -1,5 +1,7 @@
 cdef extern from "<thrust/device_vector.h>" namespace "thrust" nogil:
     cdef cppclass device_vector[T]:
+        cppclass value_type:
+            pass
         cppclass iterator:
             T& operator*()
             iterator operator++()

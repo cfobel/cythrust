@@ -1,4 +1,5 @@
 from cython.operator cimport dereference as deref, preincrement as inc
+from cython cimport typeof
 
 from cythrust.device_vector cimport device_vector
 from cythrust.fill cimport fill, fill_n, uninitialized_fill
@@ -10,13 +11,18 @@ from cythrust.counting_iterator cimport make_counting_iterator, counting_iterato
 from cythrust.discard_iterator cimport make_discard_iterator, discard_iterator
 from cythrust.transform_iterator cimport make_transform_iterator
 from cythrust.zip_iterator cimport make_zip_iterator
-from cythrust.functional cimport negate
+from cythrust.functional cimport negate, identity
+from cythrust.reduce cimport reduce as reduce_
+from cythrust.iterator_traits cimport iterator_traits
+
+
+ctypedef int Value
 
 
 def test():
-    cdef device_vector[int] *v_ptr
-    u_ptr = new device_vector[int](10)
-    v_ptr = new device_vector[int](10)
+    cdef device_vector[Value] *v_ptr
+    u_ptr = new device_vector[Value](10)
+    v_ptr = new device_vector[Value](10)
 
     sequence(u_ptr.begin(), u_ptr.end())
     fill(v_ptr.begin(), v_ptr.end(), 1)
@@ -27,7 +33,7 @@ def test():
     for i in xrange(v_ptr.size()):
         print deref(v_ptr)[i]
 
-    cdef tuple2[int, int] test = make_tuple2[int, int](1, 2)
+    cdef tuple2[Value, Value] test = make_tuple2[Value, Value](1, 2)
     cdef counting_iterator[long] c = make_counting_iterator(42)
 
     fill(v_ptr.begin(), v_ptr.end(), 1)
@@ -46,7 +52,7 @@ def test():
 
     copy(v_ptr.begin(), v_ptr.end(), make_discard_iterator())
 
-    cdef negate[int] n
+    cdef negate[Value] n
 
     copy_n(
         make_transform_iterator(v_ptr.begin(), n),
@@ -63,8 +69,23 @@ def test():
     print '----------------------------------------'
     print ''
 
+    cdef int v_sum = 0
+
     for i in xrange(10):
         print deref(u_ptr)[i]
+        v_sum += deref(v_ptr)[i]
+
+    print ''
+    print '----------------------------------------'
+    print ''
+    print v_sum
+    print <Value>reduce_(v_ptr.begin(), v_ptr.end())
+
+    cdef Value temp = <Value>reduce_(v_ptr.begin(), v_ptr.end())
+    cdef identity[float] to_float
+
+    print <float>reduce_(make_transform_iterator(v_ptr.begin(), to_float),
+                         make_transform_iterator(v_ptr.end(), to_float))
 
     del v_ptr
     del u_ptr
