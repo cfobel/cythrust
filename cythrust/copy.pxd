@@ -1,4 +1,4 @@
-cdef extern from "<thrust/copy.h>" namespace "thrust":
+cdef extern from "<thrust/copy.h>" namespace "thrust" nogil:
    OutputIterator copy[InputIterator, OutputIterator](InputIterator first,
                                                       InputIterator last,
                                                       OutputIterator result)

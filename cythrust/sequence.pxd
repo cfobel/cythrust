@@ -1,4 +1,4 @@
-cdef extern from "<thrust/sequence.h>" namespace "thrust":
+cdef extern from "<thrust/sequence.h>" namespace "thrust" nogil:
     void sequence[ForwardIterator](ForwardIterator first, ForwardIterator last)
     void sequence[ForwardIterator, T](ForwardIterator first, ForwardIterator last, T init)
     void sequence[ForwardIterator, T](ForwardIterator first, ForwardIterator last, T init, T step)

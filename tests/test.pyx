@@ -4,6 +4,9 @@ from cythrust.device_vector cimport device_vector
 from cythrust.fill cimport fill, fill_n, uninitialized_fill
 from cythrust.copy cimport copy, copy_n
 from cythrust.sequence cimport sequence
+from cythrust.tuple cimport tuple as ctuple
+from cythrust.permutation_iterator cimport make_permutation_iterator
+from cythrust.counting_iterator cimport make_counting_iterator, counting_iterator
 
 
 def test():
@@ -20,5 +23,30 @@ def test():
     for i in xrange(v_ptr.size()):
         print deref(v_ptr)[i]
 
+    cdef ctuple[int, int] test
+    cdef counting_iterator[long] c = make_counting_iterator(42)
+
+    fill(v_ptr.begin(), v_ptr.end(), 1)
+    copy_n(c, v_ptr.size(), v_ptr.begin())
+
+    print ''
+    print '----------------------------------------'
+    print ''
+
+    for i in xrange(10):
+        print deref(v_ptr)[i]
+
+    copy_n(
+        make_permutation_iterator(v_ptr.begin(), make_counting_iterator(0)),
+        v_ptr.size(), u_ptr.begin())
+
+    print ''
+    print '----------------------------------------'
+    print ''
+
+    for i in xrange(10):
+        print deref(u_ptr)[i]
+
     del v_ptr
     del u_ptr
+
