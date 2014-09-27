@@ -7,6 +7,7 @@ from cythrust.sequence cimport sequence
 from cythrust.tuple cimport tuple as ctuple
 from cythrust.permutation_iterator cimport make_permutation_iterator
 from cythrust.counting_iterator cimport make_counting_iterator, counting_iterator
+from cythrust.discard_iterator cimport make_discard_iterator, discard_iterator
 
 
 def test():
@@ -39,6 +40,8 @@ def test():
     copy_n(
         make_permutation_iterator(v_ptr.begin(), make_counting_iterator(0)),
         v_ptr.size(), u_ptr.begin())
+
+    copy(v_ptr.begin(), v_ptr.end(), make_discard_iterator())
 
     print ''
     print '----------------------------------------'
