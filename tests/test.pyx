@@ -8,6 +8,8 @@ from cythrust.tuple cimport tuple as ctuple
 from cythrust.permutation_iterator cimport make_permutation_iterator
 from cythrust.counting_iterator cimport make_counting_iterator, counting_iterator
 from cythrust.discard_iterator cimport make_discard_iterator, discard_iterator
+from cythrust.transform_iterator cimport make_transform_iterator
+from cythrust.functional cimport negate
 
 
 def test():
@@ -43,6 +45,12 @@ def test():
 
     copy(v_ptr.begin(), v_ptr.end(), make_discard_iterator())
 
+    cdef negate[int] n
+
+    copy_n(
+        make_transform_iterator(v_ptr.begin(), n),
+        v_ptr.size(), u_ptr.begin())
+
     print ''
     print '----------------------------------------'
     print ''
@@ -52,4 +60,3 @@ def test():
 
     del v_ptr
     del u_ptr
-
