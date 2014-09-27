@@ -11,8 +11,8 @@ from cythrust.counting_iterator cimport make_counting_iterator, counting_iterato
 from cythrust.discard_iterator cimport make_discard_iterator, discard_iterator
 from cythrust.transform_iterator cimport make_transform_iterator
 from cythrust.zip_iterator cimport make_zip_iterator
-from cythrust.functional cimport negate, identity
-from cythrust.reduce cimport reduce as reduce_
+from cythrust.functional cimport negate, identity, plus, multiplies
+from cythrust.reduce cimport reduce_sum, reduce as reduce_
 from cythrust.iterator_traits cimport iterator_traits
 
 
@@ -79,13 +79,21 @@ def test():
     print '----------------------------------------'
     print ''
     print v_sum
-    print <Value>reduce_(v_ptr.begin(), v_ptr.end())
+    print <Value>reduce_sum(v_ptr.begin(), v_ptr.end())
 
-    cdef Value temp = <Value>reduce_(v_ptr.begin(), v_ptr.end())
+    cdef Value temp = <Value>reduce_sum(v_ptr.begin(), v_ptr.end())
     cdef identity[float] to_float
 
-    print <float>reduce_(make_transform_iterator(v_ptr.begin(), to_float),
-                         make_transform_iterator(v_ptr.end(), to_float))
+    print <float>reduce_sum(make_transform_iterator(v_ptr.begin(), to_float),
+                            make_transform_iterator(v_ptr.end(), to_float))
+
+    cdef multiplies[float] multiply
+
+    sequence(v_ptr.begin(), v_ptr.end(), 1)
+
+    print reduce_(make_transform_iterator(v_ptr.begin(), to_float),
+                  make_transform_iterator(v_ptr.end(), to_float),
+                  1, multiply)
 
     del v_ptr
     del u_ptr
