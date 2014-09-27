@@ -4,11 +4,12 @@ from cythrust.device_vector cimport device_vector
 from cythrust.fill cimport fill, fill_n, uninitialized_fill
 from cythrust.copy cimport copy, copy_n
 from cythrust.sequence cimport sequence
-from cythrust.tuple cimport tuple as ctuple
+from cythrust.tuple cimport tuple2, tuple3, tuple4, make_tuple2
 from cythrust.permutation_iterator cimport make_permutation_iterator
 from cythrust.counting_iterator cimport make_counting_iterator, counting_iterator
 from cythrust.discard_iterator cimport make_discard_iterator, discard_iterator
 from cythrust.transform_iterator cimport make_transform_iterator
+from cythrust.zip_iterator cimport make_zip_iterator
 from cythrust.functional cimport negate
 
 
@@ -26,7 +27,7 @@ def test():
     for i in xrange(v_ptr.size()):
         print deref(v_ptr)[i]
 
-    cdef ctuple[int, int] test
+    cdef tuple2[int, int] test = make_tuple2[int, int](1, 2)
     cdef counting_iterator[long] c = make_counting_iterator(42)
 
     fill(v_ptr.begin(), v_ptr.end(), 1)
@@ -50,6 +51,13 @@ def test():
     copy_n(
         make_transform_iterator(v_ptr.begin(), n),
         v_ptr.size(), u_ptr.begin())
+
+    copy_n(
+        make_zip_iterator(
+            make_tuple2(v_ptr.begin(), v_ptr.begin())),
+        v_ptr.size(),
+        make_zip_iterator(
+            make_tuple2(u_ptr.begin(), u_ptr.begin())))
 
     print ''
     print '----------------------------------------'
