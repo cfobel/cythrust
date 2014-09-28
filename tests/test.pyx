@@ -1,23 +1,23 @@
 from cython.operator cimport dereference as deref, preincrement as inc
 from cython cimport typeof
 
-from cythrust.device_vector cimport device_vector
-from cythrust.fill cimport fill, fill_n, uninitialized_fill
-from cythrust.copy cimport copy, copy_n
-from cythrust.sequence cimport sequence
-from cythrust.tuple cimport tuple2, tuple3, tuple4, make_tuple2
-from cythrust.iterator.permutation_iterator cimport make_permutation_iterator
-from cythrust.iterator.counting_iterator cimport make_counting_iterator, counting_iterator
-from cythrust.iterator.discard_iterator cimport make_discard_iterator, discard_iterator
-from cythrust.iterator.transform_iterator cimport make_transform_iterator
-from cythrust.iterator.zip_iterator cimport make_zip_iterator
-from cythrust.functional cimport (negate, identity, plus, multiplies, equal_to,
+from cythrust.thrust.device_vector cimport device_vector
+from cythrust.thrust.fill cimport fill, fill_n, uninitialized_fill
+from cythrust.thrust.copy cimport copy, copy_n
+from cythrust.thrust.sequence cimport sequence
+from cythrust.thrust.tuple cimport tuple2, tuple3, tuple4, make_tuple2
+from cythrust.thrust.iterator.permutation_iterator cimport make_permutation_iterator
+from cythrust.thrust.iterator.counting_iterator cimport make_counting_iterator, counting_iterator
+from cythrust.thrust.iterator.discard_iterator cimport make_discard_iterator, discard_iterator
+from cythrust.thrust.iterator.transform_iterator cimport make_transform_iterator
+from cythrust.thrust.iterator.zip_iterator cimport make_zip_iterator
+from cythrust.thrust.functional cimport (negate, identity, plus, multiplies, equal_to,
                                   greater)
-from cythrust.reduce cimport (accumulate, reduce as reduce_, accumulate_by_key,
+from cythrust.thrust.reduce cimport (accumulate, reduce as reduce_, accumulate_by_key,
                               reduce_by_key)
-from cythrust.iterator.iterator_traits cimport iterator_traits
-from cythrust.pair cimport pair
-from cythrust.sort cimport sort_by_key, sort_by_key_by_op
+from cythrust.thrust.iterator.iterator_traits cimport iterator_traits
+from cythrust.thrust.pair cimport pair
+from cythrust.thrust.sort cimport sort_by_key, sort_by_key_by_op
 
 
 ctypedef int Value

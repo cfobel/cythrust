@@ -1,5 +1,5 @@
-from cythrust.iterator.iterator_traits cimport iterator_traits
-from cythrust.pair cimport pair
+from cythrust.thrust.iterator.iterator_traits cimport iterator_traits
+from cythrust.thrust.pair cimport pair
 
 
 cdef extern from "<thrust/reduce.h>" namespace "thrust" nogil:
