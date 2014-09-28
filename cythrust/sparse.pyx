@@ -66,7 +66,7 @@ def sum_coo(coo, axis=0):
                                               keys_first,
                                               <uint32_t *>&values.data[0])
                  .first - keys_first)
-        return keys[:count], values[:count]
+        return count
 
     raise ValueError('Unsupported data type: %s' % (values.dtype.type))
 
@@ -96,7 +96,7 @@ def min_coo(coo, axis=0):
                                           <uint32_t *>&values.data[0],
                                           eq, _minimum)
                  .first - keys_first)
-        return keys[:count], values[:count]
+        return count
 
     raise ValueError('Unsupported data type: %s' % (values.dtype.type))
 
