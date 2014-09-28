@@ -1,4 +1,4 @@
-from cythrust.iterator_traits cimport iterator_traits
+from cythrust.iterator.iterator_traits cimport iterator_traits
 from cythrust.pair cimport pair
 
 

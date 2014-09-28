@@ -6,16 +6,16 @@ from cythrust.fill cimport fill, fill_n, uninitialized_fill
 from cythrust.copy cimport copy, copy_n
 from cythrust.sequence cimport sequence
 from cythrust.tuple cimport tuple2, tuple3, tuple4, make_tuple2
-from cythrust.permutation_iterator cimport make_permutation_iterator
-from cythrust.counting_iterator cimport make_counting_iterator, counting_iterator
-from cythrust.discard_iterator cimport make_discard_iterator, discard_iterator
-from cythrust.transform_iterator cimport make_transform_iterator
-from cythrust.zip_iterator cimport make_zip_iterator
+from cythrust.iterator.permutation_iterator cimport make_permutation_iterator
+from cythrust.iterator.counting_iterator cimport make_counting_iterator, counting_iterator
+from cythrust.iterator.discard_iterator cimport make_discard_iterator, discard_iterator
+from cythrust.iterator.transform_iterator cimport make_transform_iterator
+from cythrust.iterator.zip_iterator cimport make_zip_iterator
 from cythrust.functional cimport (negate, identity, plus, multiplies, equal_to,
                                   greater)
 from cythrust.reduce cimport (accumulate, reduce as reduce_, accumulate_by_key,
                               reduce_by_key)
-from cythrust.iterator_traits cimport iterator_traits
+from cythrust.iterator.iterator_traits cimport iterator_traits
 from cythrust.pair cimport pair
 from cythrust.sort cimport sort_by_key, sort_by_key_by_op
 
