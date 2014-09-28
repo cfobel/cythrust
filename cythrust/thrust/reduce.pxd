@@ -7,8 +7,8 @@ cdef extern from "<thrust/reduce.h>" namespace "thrust" nogil:
     T reduce 'thrust::reduce' [InputIterator, T, BinaryFunction](InputIterator
                                                                  first,
                                                                  InputIterator
-                                                                 last, T
-                                                                 init_value,
+                                                                 last,
+                                                                 T init_value,
                                                                  BinaryFunction
                                                                  binary_op)
     pair[OutputIterator1, OutputIterator2] \
