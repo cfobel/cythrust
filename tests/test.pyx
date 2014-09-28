@@ -11,8 +11,9 @@ from cythrust.counting_iterator cimport make_counting_iterator, counting_iterato
 from cythrust.discard_iterator cimport make_discard_iterator, discard_iterator
 from cythrust.transform_iterator cimport make_transform_iterator
 from cythrust.zip_iterator cimport make_zip_iterator
-from cythrust.functional cimport negate, identity, plus, multiplies
-from cythrust.reduce cimport reduce_sum, reduce as reduce_
+from cythrust.functional cimport negate, identity, plus, multiplies, equal_to
+from cythrust.reduce cimport (accumulate, reduce as reduce_, accumulate_by_key,
+                              reduce_by_key)
 from cythrust.iterator_traits cimport iterator_traits
 
 
@@ -79,21 +80,40 @@ def test():
     print '----------------------------------------'
     print ''
     print v_sum
-    print <Value>reduce_sum(v_ptr.begin(), v_ptr.end())
+    print <Value>accumulate(v_ptr.begin(), v_ptr.end())
 
-    cdef Value temp = <Value>reduce_sum(v_ptr.begin(), v_ptr.end())
+    cdef Value temp = <Value>accumulate(v_ptr.begin(), v_ptr.end())
     cdef identity[float] to_float
 
-    print <float>reduce_sum(make_transform_iterator(v_ptr.begin(), to_float),
+    print <float>accumulate(make_transform_iterator(v_ptr.begin(), to_float),
                             make_transform_iterator(v_ptr.end(), to_float))
 
+    cdef plus[Value] plus_func
     cdef multiplies[float] multiply
+    cdef equal_to[Value] eq
 
     sequence(v_ptr.begin(), v_ptr.end(), 1)
+    sequence(u_ptr.begin(), u_ptr.end(), 1)
 
     print reduce_(make_transform_iterator(v_ptr.begin(), to_float),
                   make_transform_iterator(v_ptr.end(), to_float),
                   1, multiply)
+
+    accumulate_by_key(v_ptr.begin(), v_ptr.end(), u_ptr.begin(), v_ptr.begin(),
+                      u_ptr.begin())
+    reduce_by_key(v_ptr.begin(), v_ptr.end(), u_ptr.begin(), v_ptr.begin(),
+                  u_ptr.begin(), eq, plus_func)
+
+    print ''
+    print '----------------------------------------'
+    print ''
+
+    for i in xrange(v_ptr.size()):
+        print '%d, ' % deref(v_ptr)[i],
+    print ''
+    for i in xrange(v_ptr.size()):
+        print '%d, ' % deref(u_ptr)[i],
+    print ''
 
     del v_ptr
     del u_ptr
