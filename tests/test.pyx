@@ -11,11 +11,13 @@ from cythrust.counting_iterator cimport make_counting_iterator, counting_iterato
 from cythrust.discard_iterator cimport make_discard_iterator, discard_iterator
 from cythrust.transform_iterator cimport make_transform_iterator
 from cythrust.zip_iterator cimport make_zip_iterator
-from cythrust.functional cimport negate, identity, plus, multiplies, equal_to
+from cythrust.functional cimport (negate, identity, plus, multiplies, equal_to,
+                                  greater)
 from cythrust.reduce cimport (accumulate, reduce as reduce_, accumulate_by_key,
                               reduce_by_key)
 from cythrust.iterator_traits cimport iterator_traits
 from cythrust.pair cimport pair
+from cythrust.sort cimport sort_by_key, sort_by_key_by_op
 
 
 ctypedef int Value
@@ -116,6 +118,33 @@ def test():
     print ''
     print '----------------------------------------'
     print ''
+
+    for i in xrange(reduce_count):
+        print '%d, ' % deref(v_ptr)[i],
+    print ''
+    for i in xrange(reduce_count):
+        print '%d, ' % deref(u_ptr)[i],
+    print ''
+
+    print ''
+    print '----------------------------------------'
+    print ''
+
+    cdef greater[Value] greater_than
+    sort_by_key_by_op(v_ptr.begin(), v_ptr.end(), u_ptr.begin(), greater_than)
+
+    for i in xrange(reduce_count):
+        print '%d, ' % deref(v_ptr)[i],
+    print ''
+    for i in xrange(reduce_count):
+        print '%d, ' % deref(u_ptr)[i],
+    print ''
+
+    print ''
+    print '----------------------------------------'
+    print ''
+
+    sort_by_key(v_ptr.begin(), v_ptr.end(), u_ptr.begin())
 
     for i in xrange(reduce_count):
         print '%d, ' % deref(v_ptr)[i],
