@@ -258,3 +258,79 @@ def reduce(np.ndarray a, BinaryOpCode op, init_value=None):
                                      operation.maximum_.uint32)
 
     raise ValueError('Unsupported data type: %s' % (a.dtype.type))
+
+
+def reduce(np.ndarray a, BinaryOpCode op, init_value=None):
+    if a.ndim > 1:
+        raise ValueError('Only single dimension arrays are supported.')
+
+    cdef Iterator first
+    cdef Iterator last
+    cdef BinaryOp operation
+
+    if a.dtype.type == np.int32:
+        first.int32 = <int32_t *>a.data
+        last.int32 = first.int32 + <size_t>a.size
+
+        if op == BINARY_OPS.PLUS:
+            if init_value is None:
+                init_value = 0
+            return <int32_t>_reduce(first.int32, last.int32, <int32_t>init_value,
+                                    operation.plus_.int32)
+        elif op == BINARY_OPS.MULTIPLIES:
+            if init_value is None:
+                init_value = 1
+            return <int32_t>_reduce(first.int32, last.int32, <int32_t>init_value,
+                                    operation.multiplies_.int32)
+        elif op == BINARY_OPS.MINUS:
+            if init_value is None:
+                init_value = 0
+            return <int32_t>_reduce(first.int32, last.int32, <int32_t>init_value,
+                                    operation.minus_.int32)
+        elif op == BINARY_OPS.MINIMUM:
+            if init_value is None:
+                init_value = INT32_MAX
+            return <int32_t>_reduce(first.int32, last.int32, <int32_t>init_value,
+                                    operation.minimum_.int32)
+        elif op == BINARY_OPS.MAXIMUM:
+            if init_value is None:
+                init_value = INT32_MIN
+            return <int32_t>_reduce(first.int32, last.int32, <int32_t>init_value,
+                                    operation.maximum_.int32)
+    elif a.dtype.type == np.uint32:
+        first.uint32 = <uint32_t *>a.data
+        last.uint32 = first.uint32 + <size_t>a.size
+
+        if op == BINARY_OPS.PLUS:
+            if init_value is None:
+                init_value = 0
+            return <uint32_t>_reduce(first.uint32, last.uint32,
+                                     <uint32_t>init_value,
+                                     operation.plus_.uint32)
+        elif op == BINARY_OPS.MULTIPLIES:
+            if init_value is None:
+                init_value = 1
+            return <uint32_t>_reduce(first.uint32, last.uint32,
+                                     <uint32_t>init_value,
+                                     operation.multiplies_.uint32)
+        elif op == BINARY_OPS.MINUS:
+            if init_value is None:
+                raise ValueError('Initial value must be provided for unsigned '
+                                 'minus reductions.')
+            return <uint32_t>_reduce(first.uint32, last.uint32,
+                                     <uint32_t>init_value,
+                                     operation.minus_.uint32)
+        elif op == BINARY_OPS.MINIMUM:
+            if init_value is None:
+                init_value = UINT32_MAX
+            return <uint32_t>_reduce(first.uint32, last.uint32,
+                                     <uint32_t>init_value,
+                                     operation.minimum_.uint32)
+        elif op == BINARY_OPS.MAXIMUM:
+            if init_value is None:
+                init_value = 0
+            return <uint32_t>_reduce(first.uint32, last.uint32,
+                                     <uint32_t>init_value,
+                                     operation.maximum_.uint32)
+
+    raise ValueError('Unsupported data type: %s' % (a.dtype.type))
