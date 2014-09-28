@@ -15,9 +15,11 @@ from cythrust.functional cimport negate, identity, plus, multiplies, equal_to
 from cythrust.reduce cimport (accumulate, reduce as reduce_, accumulate_by_key,
                               reduce_by_key)
 from cythrust.iterator_traits cimport iterator_traits
+from cythrust.pair cimport pair
 
 
 ctypedef int Value
+ctypedef device_vector[Value].iterator ValueIterator
 
 
 def test():
@@ -101,17 +103,24 @@ def test():
 
     accumulate_by_key(v_ptr.begin(), v_ptr.end(), u_ptr.begin(), v_ptr.begin(),
                       u_ptr.begin())
-    reduce_by_key(v_ptr.begin(), v_ptr.end(), u_ptr.begin(), v_ptr.begin(),
-                  u_ptr.begin(), eq, plus_func)
+    cdef pair[ValueIterator, ValueIterator] result = \
+        reduce_by_key(v_ptr.begin(), v_ptr.end(), u_ptr.begin(), v_ptr.begin(),
+                      u_ptr.begin(), eq, plus_func)
+
+    cdef int reduce_count = (<ValueIterator>result.first - v_ptr.begin())
 
     print ''
     print '----------------------------------------'
     print ''
+    print 'reduce_count:', reduce_count
+    print ''
+    print '----------------------------------------'
+    print ''
 
-    for i in xrange(v_ptr.size()):
+    for i in xrange(reduce_count):
         print '%d, ' % deref(v_ptr)[i],
     print ''
-    for i in xrange(v_ptr.size()):
+    for i in xrange(reduce_count):
         print '%d, ' % deref(u_ptr)[i],
     print ''
 

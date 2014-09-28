@@ -8,6 +8,7 @@ cdef extern from "<thrust/device_vector.h>" namespace "thrust" nogil:
             iterator operator--()
             iterator operator+(size_t)
             iterator operator-(size_t)
+            int operator-(iterator)
             bint operator==(iterator)
             bint operator!=(iterator)
             bint operator<(iterator)
