@@ -16,6 +16,8 @@ setup(name='cythrust',
       package_data={'cythrust': ['*.p??']})
 
 
+#DEVICE_VECTOR_TYPES = (('int32_t', 'np.int32'), )
+
 DEVICE_VECTOR_TYPES = (('int8_t', 'np.int8'),
                        ('uint8_t', 'np.uint8'),
                        ('int16_t', 'np.int16'),
@@ -42,6 +44,13 @@ def generate_device_vector_source():
                                              dtype[3:])
         dtype_module.makedirs_p()
 
+        with dtype_module.joinpath('device_vector.pxd').open('wb') as output:
+            template_path = package_root.joinpath('cythrust', 'device_vector',
+                                                  'device_vector.pxdt')
+            template = jinja2.Template(template_path.bytes())
+            output.write(template.render({'C_DTYPE': ctype,
+                                          'NP_DTYPE': dtype}))
+
         with dtype_module.joinpath('device_vector.pyx').open('wb') as output:
             template_path = package_root.joinpath('cythrust', 'device_vector',
                                                   'device_vector.pyxt')
@@ -60,6 +69,12 @@ def generate_device_vector_source():
 
     with device_vector_path.joinpath('__init__.py').open('wb') as output:
         template_path = device_vector_path.joinpath('__init__.pyt')
+        template = jinja2.Template(template_path.bytes())
+        output.write(template.render({'DEVICE_VECTOR_TYPES':
+                                      DEVICE_VECTOR_TYPES}))
+
+    with device_vector_path.joinpath('__init__.pxd').open('wb') as output:
+        template_path = device_vector_path.joinpath('__init__.pxdt')
         template = jinja2.Template(template_path.bytes())
         output.write(template.render({'DEVICE_VECTOR_TYPES':
                                       DEVICE_VECTOR_TYPES}))

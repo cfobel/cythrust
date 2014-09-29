@@ -1,5 +1,6 @@
 # cython: embedsignature = True
 
+import sys
 from cython.operator cimport dereference as deref
 import numpy as np
 cimport numpy as np
@@ -9,26 +10,28 @@ from libc.stdint cimport (
     int32_t, uint32_t,
     int64_t, uint64_t)
 
-from cythrust.thrust.device_vector cimport device_vector
 from cythrust.thrust.copy cimport copy_n
+from cythrust.thrust.fill cimport fill_n
 
 
-ctypedef {{ C_DTYPE }} Value
 CTYPE = '{{ C_DTYPE }}'
 DTYPE = {{ NP_DTYPE }}
-ctypedef device_vector[Value] Vector
-ctypedef device_vector[Value].iterator Iterator
 
 
 cdef class DeviceVector:
-    cdef Vector *_vector
-    cdef object dtype
-    cdef object ctype
-
     def __cinit__(self, size_t size=0):
-        self._vector = new Vector(size)
+        self._vector = new device_vector[{{ C_DTYPE }}](size)
         self.dtype = DTYPE
         self.ctype = CTYPE
+
+    @classmethod
+    def from_array(cls, np.ndarray a):
+        cdef np.ndarray _a = np.ascontiguousarray(a, dtype={{ NP_DTYPE }})
+        cdef size_t N = _a.size
+        cdef DeviceVector vector = DeviceVector(N)
+        cdef {{ C_DTYPE }} *data = <{{ C_DTYPE }}*>&_a.data[0]
+        copy_n(data, N, vector._vector.begin())
+        return vector
 
     def resize(self, size_t size):
         '''
@@ -41,18 +44,57 @@ cdef class DeviceVector:
         Return a _copy_ of the device vector as a `numpy` array of type
         `dtype`.
         '''
-        return self.as_array().astype(dtype)
+        return self.asarray().astype(dtype)
 
-    def as_array(self):
+    def asarray(self):
         '''
         Return a _copy_ of the device vector as a `numpy` array.
         '''
-        cdef int i
-        return np.fromiter((deref(self._vector)[i] for i in xrange(self.size)),
-                           dtype=DTYPE)
+        return self[:]
 
     def __dealloc__(self):
         del self._vector
+
+    def __getitem__(self, i):
+        return deref(self._vector)[i]
+
+    def __setitem__(self, i, {{ C_DTYPE }} value):
+        deref(self._vector)[i] = value
+
+    def __getslice__(self, i, j):
+        if i < 0:
+            i = self.size + i
+        if j < 0:
+            j = self.size + j
+        elif j == sys.maxint:
+            j = self.size
+        assert(i <= j)
+        cdef int N = j - i
+        cdef np.ndarray result = np.empty(N, dtype={{ NP_DTYPE }})
+        copy_n(self._vector.begin() + <size_t>i, N,
+               <{{ C_DTYPE }}*>result.data)
+        return result
+
+    def __setslice__(self, i, j, values):
+        if i < 0:
+            i = self.size + i
+        if j < 0:
+            j = self.size + j
+        elif j == sys.maxint:
+            j = self.size
+        assert(i <= j)
+        cdef int N = j - i
+        cdef np.ndarray _values = np.ascontiguousarray(values,
+                                                       dtype={{ NP_DTYPE }})
+        if _values.size == 1:
+            # Input was a single value.
+            fill_n(self._vector.begin() + <size_t>i, N, <{{ C_DTYPE }}>_values[0])
+        elif _values.size == N:
+            copy_n(<{{ C_DTYPE }}*>_values.data, N,
+                   self._vector.begin() + <size_t>i)
+        else:
+            raise ValueError('Incorrect slice length.  Expected %d, but got %d'
+                             % (N, _values.size))
 
     property dtype:
         def __get__(self):
