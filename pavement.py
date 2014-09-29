@@ -1,25 +1,10 @@
 import os
 from paver.easy import task, needs, path, sh
-from paver.setuputils import setup, install_distutils_tasks
-from Cython.Build import cythonize
+from paver.setuputils import setup, install_distutils_tasks, find_package_data
+from distutils.extension import Extension
 
 import version
 
-extension = cythonize('cythrust/si_prefix.pyx')
-
-setup(name='cythrust',
-      version=version.getVersion(),
-      description='Cython bindings for the Thrust parallel library.',
-      keywords='cython thrust cuda gpu numpy',
-      author='Christian Fobel',
-      url='https://github.com/cfobel/cythrust',
-      license='GPL',
-      packages=['cythrust'],
-      package_data={'cythrust': ['*.p??']},
-      ext_modules=extension)
-
-
-#DEVICE_VECTOR_TYPES = (('int32_t', 'np.int32'), )
 
 DEVICE_VECTOR_TYPES = (('int8_t', 'np.int8'),
                        ('uint8_t', 'np.uint8'),
@@ -31,6 +16,46 @@ DEVICE_VECTOR_TYPES = (('int8_t', 'np.int8'),
                        ('uint64_t', 'np.uint64'),
                        ('float', 'np.float32'),
                        ('double', 'np.float64'))
+
+
+pyx_files = (['cythrust/device_vector/%s/device_vector.pyx' % (dtype[3:])
+              for ctype, dtype in DEVICE_VECTOR_TYPES] +
+             ['cythrust/si_prefix.pyx', 'cythrust/functional.pyx',
+              'cythrust/sparse.pyx', 'cythrust/reduce.pyx',
+              'cythrust/describe.pyx'])
+
+
+
+if os.environ.get('CYTHON_BUILD') is None:
+    pyx_files = [f.replace('.pyx', '.cpp') for f in pyx_files]
+
+ext_modules = [Extension(f[:-4].replace('/', '.'), [f],
+                         include_dirs=[path('~/local/include').expand(),
+                                       '/usr/local/cuda-5.5/include',
+                                       'cythrust'],
+                         define_macros=[('THRUST_DEVICE_SYSTEM',
+                                         'THRUST_DEVICE_SYSTEM_CPP')])
+               for f in pyx_files]
+
+if os.environ.get('CYTHON_BUILD') is not None:
+    from Cython.Build import cythonize
+
+    ext_modules = cythonize(ext_modules)
+
+
+setup(name='cythrust',
+      version=version.getVersion(),
+      description='Cython bindings for the Thrust parallel library.',
+      keywords='cython thrust cuda gpu numpy',
+      author='Christian Fobel',
+      url='https://github.com/cfobel/cythrust',
+      license='GPL',
+      packages=['cythrust'],
+      package_data=find_package_data('cythrust', package='cythrust',
+                                     only_in_packages=False),
+      ext_modules=ext_modules)
+
+
 
 
 @task
@@ -84,43 +109,15 @@ def generate_device_vector_source():
 
 
 @task
-@needs('generate_device_vector_source')
-def build_device_vector_cpp():
-    cwd = os.getcwd()
-    package_root = path(__file__).abspath().parent
-
-    try:
-        for ctype, dtype in DEVICE_VECTOR_TYPES:
-            dtype_module = package_root.joinpath('cythrust', 'device_vector',
-                                                 dtype[3:])
-            os.chdir(dtype_module)
-            sh('cython device_vector.pyx --cplus -I../..')
-    finally:
-        os.chdir(cwd)
+@needs('generate_device_vector_source', 'generate_setup', 'minilib',
+       'setuptools.command.build_ext')
+def build_ext():
+    """Overrides sdist to make sure that our setup.py is generated."""
+    pass
 
 
 @task
-@needs('build_device_vector_cpp')
-def build_device_vector_pyx():
-    cwd = os.getcwd()
-    package_root = path(__file__).abspath().parent
-
-    try:
-        for ctype, dtype in DEVICE_VECTOR_TYPES:
-            dtype_module = package_root.joinpath('cythrust', 'device_vector',
-                                                 dtype[3:])
-            os.chdir(dtype_module)
-            sh('g++ -O3 -shared -pthread -fPIC -fwrapv -fno-strict-aliasing '
-               '-I/usr/include/python2.7 -o device_vector.so device_vector.cpp'
-               ' -I/usr/local/cuda-6.5/include -I../.. '
-               '-DTHRUST_DEVICE_SYSTEM=THRUST_DEVICE_SYSTEM_CPP')
-    finally:
-        os.chdir(cwd)
-
-
-@task
-@needs('build_device_vector_pyx', 'generate_setup', 'minilib',
-       'setuptools.command.sdist')
+@needs('build_ext', 'generate_setup', 'minilib', 'setuptools.command.sdist')
 def sdist():
     """Overrides sdist to make sure that our setup.py is generated."""
     pass

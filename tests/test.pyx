@@ -1,3 +1,4 @@
+# distutils: language = c++
 from cython.operator cimport dereference as deref, preincrement as inc
 from cython cimport typeof
 

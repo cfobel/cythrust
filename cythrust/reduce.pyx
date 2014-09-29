@@ -1,3 +1,4 @@
+# distutils: language = c++
 cimport cython
 from cython.operator cimport dereference as deref
 from libc.stdint cimport (uint32_t, int32_t, int64_t, uint64_t, INT32_MIN,

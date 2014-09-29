@@ -1,8 +1,10 @@
+# distutils: language = c++
+# distutils: include_dirs = c++
+
 from libc.stdint cimport int32_t, uint32_t
 from cythrust.functional cimport UnaryIntFunction
 from cythrust.thrust.functional cimport (unary_function, binary_function,
                                          negate, plus)
-
 
 cdef class NegateInt(UnaryIntFunction):
     def __cinit__(self):
