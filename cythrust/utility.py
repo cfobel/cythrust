@@ -1,11 +1,9 @@
 import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
 
 from cythrust.si_prefix import si_format  # SI engineering formatting
 
 
-def plot_runtime_comparison(runtimes):
+def plot_runtime_comparison(axis, runtimes):
     '''
     Plot a bar plot comparison of runtimes in a `pandas.DataFrame` with the
     following columns:
@@ -17,8 +15,6 @@ def plot_runtime_comparison(runtimes):
     algs = runtimes['alg'].unique()
     N_algs = len(algs)
 
-    fig = plt.figure(figsize=(10, 3))
-    axis = fig.add_subplot(111)
     color_cycle = axis._get_lines.color_cycle
     group_width = N_algs + 1
 

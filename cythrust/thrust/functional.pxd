@@ -53,3 +53,8 @@ cdef extern from "<thrust/functional.h>" namespace "thrust" nogil:
         pass
     cdef cppclass binary_negate[Predicate]:
         pass
+
+
+cdef extern from "src/functional.hpp" namespace "cythrust" nogil:
+    cdef cppclass plus_tuple5[T]:
+        pass
