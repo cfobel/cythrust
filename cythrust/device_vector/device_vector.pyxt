@@ -3,22 +3,32 @@
 from cython.operator cimport dereference as deref
 import numpy as np
 cimport numpy as np
-from libc.stdint cimport int32_t
+from libc.stdint cimport (
+    int8_t, uint8_t,
+    int16_t, uint16_t,
+    int32_t, uint32_t,
+    int64_t, uint64_t)
 
 from cythrust.thrust.device_vector cimport device_vector
+from cythrust.thrust.copy cimport copy_n
 
 
-ctypedef int32_t Value
-DTYPE = np.int32
+ctypedef {{ C_DTYPE }} Value
+CTYPE = '{{ C_DTYPE }}'
+DTYPE = {{ NP_DTYPE }}
 ctypedef device_vector[Value] Vector
 ctypedef device_vector[Value].iterator Iterator
 
 
 cdef class DeviceVector:
     cdef Vector *_vector
+    cdef object dtype
+    cdef object ctype
 
     def __cinit__(self, size_t size=0):
         self._vector = new Vector(size)
+        self.dtype = DTYPE
+        self.ctype = CTYPE
 
     def resize(self, size_t size):
         '''
@@ -43,6 +53,14 @@ cdef class DeviceVector:
 
     def __dealloc__(self):
         del self._vector
+
+    property dtype:
+        def __get__(self):
+            return self.dtype
+
+    property ctype:
+        def __get__(self):
+            return self.ctype
 
     property size:
         def __get__(self):
