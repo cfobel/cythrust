@@ -1,9 +1,11 @@
 import os
 from paver.easy import task, needs, path, sh
 from paver.setuputils import setup, install_distutils_tasks
+from Cython.Build import cythonize
 
 import version
 
+extension = cythonize('cythrust/si_prefix.pyx')
 
 setup(name='cythrust',
       version=version.getVersion(),
@@ -13,7 +15,8 @@ setup(name='cythrust',
       url='https://github.com/cfobel/cythrust',
       license='GPL',
       packages=['cythrust'],
-      package_data={'cythrust': ['*.p??']})
+      package_data={'cythrust': ['*.p??']},
+      ext_modules=extension)
 
 
 #DEVICE_VECTOR_TYPES = (('int32_t', 'np.int32'), )
