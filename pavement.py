@@ -1,4 +1,6 @@
 import os
+
+import jinja2
 from paver.easy import task, needs, path, sh
 from paver.setuputils import setup, install_distutils_tasks, find_package_data
 from distutils.extension import Extension
@@ -22,7 +24,7 @@ pyx_files = (['cythrust/device_vector/%s/device_vector.pyx' % (dtype[3:])
               for ctype, dtype in DEVICE_VECTOR_TYPES] +
              ['cythrust/si_prefix.pyx', 'cythrust/functional.pyx',
               'cythrust/sparse.pyx', 'cythrust/reduce.pyx',
-              'cythrust/describe.pyx'])
+              'cythrust/describe.pyx', 'cythrust/tests/test_fusion.pyx'])
 
 
 
@@ -30,8 +32,9 @@ if os.environ.get('CYTHON_BUILD') is None:
     pyx_files = [f.replace('.pyx', '.cpp') for f in pyx_files]
 
 ext_modules = [Extension(f[:-4].replace('/', '.'), [f],
+                         extra_compile_args=['-O3', '-msse3', '-std=c++0x'],
                          include_dirs=[path('~/local/include').expand(),
-                                       '/usr/local/cuda-5.5/include',
+                                       '/usr/local/cuda-6.5/include',
                                        'cythrust'],
                          define_macros=[('THRUST_DEVICE_SYSTEM',
                                          'THRUST_DEVICE_SYSTEM_CPP')])
@@ -56,89 +59,107 @@ setup(name='cythrust',
       ext_modules=ext_modules)
 
 
-
-
 @task
 def generate_device_vector_source():
     '''
     Generate Cython code from template for `DeviceVector` extension types.
     '''
-    import jinja2
-
     package_root = path(__file__).abspath().parent
+    device_root = package_root.joinpath('cythrust', 'device_vector')
+    _generate_device_vector_source(device_root)
 
+
+@task
+def generate_device_vector_source_cuda():
+    '''
+    Generate Cython code from template for `DeviceVector` extension types.
+    '''
+    package_root = path(__file__).abspath().parent
+    device_root = package_root.joinpath('cythrust', 'cuda', 'device_vector')
+    _generate_device_vector_source(device_root)
+
+
+def _generate_device_vector_source(device_root):
     for ctype, dtype in DEVICE_VECTOR_TYPES:
-        dtype_module = package_root.joinpath('cythrust', 'device_vector',
-                                             dtype[3:])
+        dtype_module = device_root.joinpath(dtype[3:])
         dtype_module.makedirs_p()
 
         with dtype_module.joinpath('device_vector.pxd').open('wb') as output:
-            template_path = package_root.joinpath('cythrust', 'device_vector',
-                                                  'device_vector.pxdt')
+            template_path = device_root.joinpath('device_vector.pxdt')
             template = jinja2.Template(template_path.bytes())
             output.write(template.render({'C_DTYPE': ctype,
                                           'NP_DTYPE': dtype}))
 
         with dtype_module.joinpath('device_vector.pyx').open('wb') as output:
-            template_path = package_root.joinpath('cythrust', 'device_vector',
-                                                  'device_vector.pyxt')
+            template_path = device_root.joinpath('device_vector.pyxt')
             template = jinja2.Template(template_path.bytes())
             output.write(template.render({'C_DTYPE': ctype,
                                           'NP_DTYPE': dtype}))
 
         with dtype_module.joinpath('__init__.py').open('wb') as output:
-            template_path = package_root.joinpath('cythrust', 'device_vector',
-                                                  'dtype.__init__.pyt')
+            template_path = device_root.joinpath('dtype.__init__.pyt')
             template = jinja2.Template(template_path.bytes())
             output.write(template.render({'C_DTYPE': ctype,
                                           'NP_DTYPE': dtype}))
 
-    device_vector_path = package_root.joinpath('cythrust', 'device_vector')
-
-    with device_vector_path.joinpath('__init__.py').open('wb') as output:
-        template_path = device_vector_path.joinpath('__init__.pyt')
+    with device_root.joinpath('__init__.py').open('wb') as output:
+        template_path = device_root.joinpath('__init__.pyt')
         template = jinja2.Template(template_path.bytes())
         output.write(template.render({'DEVICE_VECTOR_TYPES':
                                       DEVICE_VECTOR_TYPES}))
 
-    with device_vector_path.joinpath('__init__.pxd').open('wb') as output:
-        template_path = device_vector_path.joinpath('__init__.pxdt')
+    with device_root.joinpath('__init__.pxd').open('wb') as output:
+        template_path = device_root.joinpath('__init__.pxdt')
         template = jinja2.Template(template_path.bytes())
         output.write(template.render({'DEVICE_VECTOR_TYPES':
                                       DEVICE_VECTOR_TYPES}))
 
 
 @task
-@needs('generate_device_vector_source')
-def build_device_vector_cpp():
+@needs('generate_device_vector_source_cuda')
+def build_device_vector_cu():
     cwd = os.getcwd()
     package_root = path(__file__).abspath().parent
+    device_root = package_root.joinpath('cythrust', 'cuda', 'device_vector')
 
     try:
         for ctype, dtype in DEVICE_VECTOR_TYPES:
-            dtype_module = package_root.joinpath('cythrust', 'device_vector',
-                                                 dtype[3:])
+            dtype_module = device_root.joinpath(dtype[3:])
             os.chdir(dtype_module)
-            sh('cython device_vector.pyx --cplus -I../..')
+            sh('cython device_vector.pyx --cplus -I../.. -o device_vector.cu')
+        os.chdir(device_root.parent.joinpath('tests'))
+        sh('cython test_fusion.pyx --cplus -I../.. -o test_fusion.cu')
     finally:
         os.chdir(cwd)
 
 
 @task
-@needs('build_device_vector_cpp')
+@needs('build_device_vector_cu')
 def build_device_vector_pyx():
     cwd = os.getcwd()
     package_root = path(__file__).abspath().parent
+    device_root = package_root.joinpath('cythrust', 'cuda', 'device_vector')
 
     try:
         for ctype, dtype in DEVICE_VECTOR_TYPES:
-            dtype_module = package_root.joinpath('cythrust', 'device_vector',
-                                                 dtype[3:])
+            dtype_module = device_root.joinpath(dtype[3:])
             os.chdir(dtype_module)
-            sh('g++ -O3 -shared -pthread -fPIC -fwrapv -fno-strict-aliasing '
-               '-I/usr/include/python2.7 -o device_vector.so device_vector.cpp'
-               ' -I/usr/local/cuda-6.5/include -I../.. '
-               '-DTHRUST_DEVICE_SYSTEM=THRUST_DEVICE_SYSTEM_CPP')
+            sh('nvcc -use_fast_math -shared -arch sm_20 --compiler-options '
+               '"-fPIC -pthread '
+               '-fno-strict-aliasing -DNDEBUG -g -fwrapv -Wall '
+               '-Wstrict-prototypes -fPIC '
+               '-DTHRUST_DEVICE_SYSTEM=THRUST_DEVICE_SYSTEM_CUDA" '
+               '-I%s/local/include -I/usr/local/cuda-6.5/include '
+               '-Icythrust -I/usr/include/python2.7 device_vector.cu '
+               '-o device_vector.so')
+        os.chdir(device_root.parent.joinpath('tests'))
+        sh('nvcc -use_fast_math -shared -arch sm_20 --compiler-options '
+           '"-fPIC -pthread -fno-strict-aliasing -DNDEBUG -g -fwrapv -Wall '
+           '-Wstrict-prototypes '
+           '-DTHRUST_DEVICE_SYSTEM=THRUST_DEVICE_SYSTEM_CUDA" '
+           '-I%s/local/include -I/usr/local/cuda-6.5/include '
+           '-I../.. -I/usr/include/python2.7 test_fusion.cu '
+           '-o test_fusion.so')
     finally:
         os.chdir(cwd)
 

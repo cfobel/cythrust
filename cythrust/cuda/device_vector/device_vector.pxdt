@@ -1,0 +1,21 @@
+from cython.operator cimport dereference as deref
+import numpy as np
+cimport numpy as np
+from libc.stdint cimport (
+    int8_t, uint8_t,
+    int16_t, uint16_t,
+    int32_t, uint32_t,
+    int64_t, uint64_t)
+
+from cythrust.thrust.device_vector cimport device_vector
+
+
+ctypedef {{ C_DTYPE }} Value
+ctypedef device_vector[Value] Vector
+ctypedef device_vector[Value].iterator Iterator
+
+
+cdef class DeviceVector:
+    cdef device_vector[{{ C_DTYPE }}] *_vector
+    cdef object dtype
+    cdef object ctype
