@@ -56,5 +56,22 @@ cdef extern from "<thrust/functional.h>" namespace "thrust" nogil:
 
 
 cdef extern from "src/functional.hpp" namespace "cythrust" nogil:
+    cdef cppclass plus5[T]:
+        pass
+
     cdef cppclass plus_tuple5[T]:
         pass
+
+
+cdef extern from "src/unpack_args.hpp":
+    cdef cppclass unpack_binary_args[Functor]:
+        unpack_binary_args(Functor)
+
+    cdef cppclass unpack_ternary_args[Functor]:
+        unpack_ternary_args(Functor)
+
+    cdef cppclass unpack_quaternary_args[Functor]:
+        unpack_quaternary_args(Functor)
+
+    cdef cppclass unpack_quinary_args[Functor]:
+        unpack_quinary_args(Functor)

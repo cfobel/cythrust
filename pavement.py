@@ -109,6 +109,41 @@ def generate_device_vector_source():
 
 
 @task
+@needs('generate_device_vector_source')
+def build_device_vector_cpp():
+    cwd = os.getcwd()
+    package_root = path(__file__).abspath().parent
+
+    try:
+        for ctype, dtype in DEVICE_VECTOR_TYPES:
+            dtype_module = package_root.joinpath('cythrust', 'device_vector',
+                                                 dtype[3:])
+            os.chdir(dtype_module)
+            sh('cython device_vector.pyx --cplus -I../..')
+    finally:
+        os.chdir(cwd)
+
+
+@task
+@needs('build_device_vector_cpp')
+def build_device_vector_pyx():
+    cwd = os.getcwd()
+    package_root = path(__file__).abspath().parent
+
+    try:
+        for ctype, dtype in DEVICE_VECTOR_TYPES:
+            dtype_module = package_root.joinpath('cythrust', 'device_vector',
+                                                 dtype[3:])
+            os.chdir(dtype_module)
+            sh('g++ -O3 -shared -pthread -fPIC -fwrapv -fno-strict-aliasing '
+               '-I/usr/include/python2.7 -o device_vector.so device_vector.cpp'
+               ' -I/usr/local/cuda-6.5/include -I../.. '
+               '-DTHRUST_DEVICE_SYSTEM=THRUST_DEVICE_SYSTEM_CPP')
+    finally:
+        os.chdir(cwd)
+
+
+@task
 @needs('generate_device_vector_source', 'generate_setup', 'minilib',
        'setuptools.command.build_ext')
 def build_ext():
