@@ -56,6 +56,15 @@ cdef extern from "<thrust/functional.h>" namespace "thrust" nogil:
 
 
 cdef extern from "src/functional.hpp" namespace "cythrust" nogil:
+    cdef cppclass square[T]:
+        pass
+
+    cdef cppclass reduce_plus4[T]:
+        pass
+
+    cdef cppclass plus4[T]:
+        pass
+
     cdef cppclass plus5[T]:
         pass
 

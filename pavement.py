@@ -32,12 +32,13 @@ if os.environ.get('CYTHON_BUILD') is None:
     pyx_files = [f.replace('.pyx', '.cpp') for f in pyx_files]
 
 ext_modules = [Extension(f[:-4].replace('/', '.'), [f],
-                         extra_compile_args=['-O3', '-msse3', '-std=c++0x'],
+                         extra_compile_args=['-O3', '-msse3', '-std=c++0x',
+                                             '-fopenmp'],
                          include_dirs=[path('~/local/include').expand(),
                                        '/usr/local/cuda-6.5/include',
                                        'cythrust'],
                          define_macros=[('THRUST_DEVICE_SYSTEM',
-                                         'THRUST_DEVICE_SYSTEM_CPP')])
+                                         'THRUST_DEVICE_SYSTEM_TBB')])
                for f in pyx_files]
 
 if os.environ.get('CYTHON_BUILD') is not None:
