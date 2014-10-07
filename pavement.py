@@ -38,7 +38,7 @@ ext_modules = [Extension(f[:-4].replace('/', '.'), [f],
                                        '/usr/local/cuda-6.5/include',
                                        'cythrust'],
                          define_macros=[('THRUST_DEVICE_SYSTEM',
-                                         'THRUST_DEVICE_SYSTEM_TBB')])
+                                         'THRUST_DEVICE_SYSTEM_CPP')])
                for f in pyx_files]
 
 if os.environ.get('CYTHON_BUILD') is not None:
