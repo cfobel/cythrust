@@ -56,6 +56,33 @@ cdef extern from "<thrust/functional.h>" namespace "thrust" nogil:
 
 
 cdef extern from "src/functional.hpp" namespace "cythrust" nogil:
+    cdef cppclass less_than_constant[T]:
+        less_than_constant(T)
+
+    cdef cppclass non_positive[T]:  # <= 0
+        pass
+
+    cdef cppclass non_negative[T]:  # >= 0
+        pass
+
+    cdef cppclass negative[T]:  # < 0
+        pass
+
+    cdef cppclass positive[T]:  # > 0
+        pass
+
+    cdef cppclass duplicate[T]:
+        pass
+
+    cdef cppclass minmax_tuple[T]:
+        pass
+
+    cdef cppclass minmax[T]:
+        pass
+
+    cdef cppclass absolute[T]:
+        pass
+
     cdef cppclass square[T]:
         pass
 

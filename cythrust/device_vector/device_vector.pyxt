@@ -111,3 +111,112 @@ cdef class DeviceVector:
 
         def __set__(self, value):
             self._vector.resize(value)
+
+
+cdef class DeviceVectorView:
+    def __cinit__(self, DeviceVector vector, first_i=0, last_i=-1):
+        self.dtype = DTYPE
+        self.ctype = CTYPE
+        self._vector = vector._vector
+        self.first_i = first_i
+        self.last_i = last_i
+
+    def reset(self):
+        self._begin = self._vector.begin()
+        self._end = self._vector.end()
+
+    property first_i:
+        def __get__(self):
+            return self._begin - self._vector.begin()
+
+        def __set__(self, value):
+            if value < 0:
+                value += self._vector.size()
+            cdef device_vector[{{ C_DTYPE }}].iterator begin
+            begin = self._begin = self._vector.begin() + <size_t>value
+            cdef int64_t size = (begin - self._vector.begin())
+            if size < 0 or size > self._vector.size():
+                raise ValueError('Out of range: i = %d.')
+            else:
+                self._begin = begin
+
+    property last_i:
+        def __get__(self):
+            return self._end - self._vector.begin() - 1
+
+        def __set__(self, int64_t value):
+            if value < 0:
+                value += self._vector.size()
+            cdef device_vector[{{ C_DTYPE }}].iterator end
+            end = self._vector.begin() + <size_t>value + 1
+            cdef int64_t size = (end - self._vector.begin())
+            if size < 0 or size > self._vector.size():
+                raise ValueError('Out of range: i = %d.')
+            else:
+                self._end = end
+
+    def astype(self, dtype):
+        '''
+        Return a _copy_ of the device vector view as a `numpy` array of type
+        `dtype`.
+        '''
+        return self.asarray().astype(dtype)
+
+    def asarray(self):
+        '''
+        Return a _copy_ of the device vector view as a `numpy` array.
+        '''
+        return self[:]
+
+    def __getitem__(self, size_t i):
+        return deref(self._begin + i)
+
+    def __setitem__(self, size_t i, {{ C_DTYPE }} value):
+        fill_n(self._begin + i, 1, value)
+
+    def __getslice__(self, i, j):
+        if i < 0:
+            i = self.size + i
+        if j < 0:
+            j = self.size + j
+        elif j == sys.maxint:
+            j = self.size
+        assert(i <= j)
+        cdef int N = j - i
+        cdef np.ndarray result = np.empty(N, dtype={{ NP_DTYPE }})
+        copy_n(self._begin + <size_t>i, N, <{{ C_DTYPE }}*>result.data)
+        return result
+
+    def __setslice__(self, i, j, values):
+        if i < 0:
+            i = self.size + i
+        if j < 0:
+            j = self.size + j
+        elif j == sys.maxint:
+            j = self.size
+        assert(i <= j)
+        cdef int N = j - i
+        assert(N < self.size)
+        cdef np.ndarray _values = np.ascontiguousarray(values,
+                                                       dtype={{ NP_DTYPE }})
+        if _values.size == 1:
+            # Input was a single value.
+            fill_n(self._begin + <size_t>i, N, <{{ C_DTYPE }}>_values[0])
+        elif _values.size == N:
+            copy_n(<{{ C_DTYPE }}*>_values.data, N,
+                   self._begin + <size_t>i)
+        else:
+            raise ValueError('Incorrect slice length.  Expected %d, but got %d'
+                             % (N, _values.size))
+
+    property dtype:
+        def __get__(self):
+            return self.dtype
+
+    property ctype:
+        def __get__(self):
+            return self.ctype
+
+    property size:
+        def __get__(self):
+            return self._end - self._begin

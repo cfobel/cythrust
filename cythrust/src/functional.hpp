@@ -4,6 +4,51 @@
 namespace cythrust {
 
   template <typename T>
+  struct duplicate {
+    typedef thrust::tuple<T, T> result_type;
+
+    template <typename T1>
+    result_type operator() (T1 a) {
+      return thrust::make_tuple(a, a);
+    }
+  };
+
+
+  template <typename T>
+  struct minmax {
+    typedef thrust::tuple<T, T> result_type;
+
+    template <typename T1, typename T2>
+    result_type operator() (T1 a, T2 b) {
+      return thrust::make_tuple((a < b) ? a : b, (a < b) ? b : a);
+    }
+  };
+
+
+  template <typename T>
+  struct minmax_tuple {
+    typedef thrust::tuple<T, T> result_type;
+
+    template <typename T1, typename T2>
+    result_type operator() (T1 const &a, T2 const &b) {
+      return thrust::make_tuple(
+          (thrust::get<0>(a) < thrust::get<0>(b)) ? thrust::get<0>(a)
+                                                  : thrust::get<0>(b),
+          (thrust::get<0>(a) < thrust::get<0>(b)) ? thrust::get<0>(b)
+                                                  : thrust::get<0>(a));
+    }
+  };
+
+
+  template <typename T>
+  struct absolute {
+    typedef T result_type;
+
+    T operator() (T a) { return (a < 0) ? -a : a; }
+  };
+
+
+  template <typename T>
   struct square {
     typedef T result_type;
 
@@ -63,5 +108,54 @@ namespace cythrust {
       return (thrust::get<0>(t) + thrust::get<1>(t) + thrust::get<2>(t) +
               thrust::get<3>(t) + thrust::get<4>(t));
     }
+  };
+
+
+  template <typename T>
+  struct non_positive {
+    typedef T result_type;
+
+    template <typename Tuple>
+    T operator() (Tuple const &t) { return t <= 0; }
+  };
+
+
+  template <typename T>
+  struct negative {
+    typedef T result_type;
+
+    template <typename Tuple>
+    T operator() (Tuple const &t) { return t < 0; }
+  };
+
+
+  template <typename T>
+  struct non_negative {
+    typedef T result_type;
+
+    template <typename Tuple>
+    T operator() (Tuple const &t) { return t >= 0; }
+  };
+
+
+  template <typename T>
+  struct positive {
+    typedef T result_type;
+
+    template <typename Tuple>
+    T operator() (Tuple const &t) { return t > 0; }
+  };
+
+
+  template <typename T>
+  struct less_than_constant {
+    typedef T result_type;
+
+    result_type value;
+
+    less_than_constant(T value) : value(value) {}
+
+    template <typename T1>
+    result_type operator() (T1 v) { return v < value; }
   };
 }

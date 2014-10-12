@@ -19,12 +19,23 @@ DEVICE_VECTOR_TYPES = (('int8_t', 'np.int8'),
                        ('float', 'np.float32'),
                        ('double', 'np.float64'))
 
+COMMON_DEVICE_VECTOR_TYPES = [DEVICE_VECTOR_TYPES[i] for i in (4, 5, 8)]
+INTEGRAL_DEVICE_VECTOR_TYPES = DEVICE_VECTOR_TYPES[:-2]
+FLOAT_DEVICE_VECTOR_TYPES = DEVICE_VECTOR_TYPES[-2:]
+
 
 pyx_files = (['cythrust/device_vector/%s/device_vector.pyx' % (dtype[3:])
               for ctype, dtype in DEVICE_VECTOR_TYPES] +
-             ['cythrust/si_prefix.pyx', 'cythrust/functional.pyx',
-              'cythrust/sparse.pyx', 'cythrust/reduce.pyx',
-              'cythrust/describe.pyx', 'cythrust/tests/test_fusion.pyx'])
+             ['cythrust/device_vector/copy.pyx',
+              'cythrust/device_vector/count.pyx',
+              'cythrust/device_vector/extrema.pyx',
+              'cythrust/device_vector/partition.pyx',
+              'cythrust/device_vector/sort.pyx',
+              'cythrust/device_vector/sum.pyx',
+              'cythrust/si_prefix.pyx',
+              'cythrust/functional.pyx', 'cythrust/sparse.pyx',
+              'cythrust/reduce.pyx', 'cythrust/describe.pyx',
+              'cythrust/tests/test_fusion.pyx'])
 
 
 
@@ -85,35 +96,37 @@ def _generate_device_vector_source(device_root):
         dtype_module = device_root.joinpath(dtype[3:])
         dtype_module.makedirs_p()
 
-        with dtype_module.joinpath('device_vector.pxd').open('wb') as output:
-            template_path = device_root.joinpath('device_vector.pxdt')
-            template = jinja2.Template(template_path.bytes())
-            output.write(template.render({'C_DTYPE': ctype,
-                                          'NP_DTYPE': dtype}))
+        for f in ('device_vector.pxd', 'device_vector.pyx', '__init__.py'):
+            output_path = dtype_module.joinpath(f)
+            template_path = device_root.joinpath(f + 't')
 
-        with dtype_module.joinpath('device_vector.pyx').open('wb') as output:
-            template_path = device_root.joinpath('device_vector.pyxt')
-            template = jinja2.Template(template_path.bytes())
-            output.write(template.render({'C_DTYPE': ctype,
-                                          'NP_DTYPE': dtype}))
+            if not output_path.exists() or (output_path.mtime <
+                                            template_path.mtime):
+                with output_path.open('wb') as output:
+                    template = jinja2.Template(template_path.bytes())
+                    output.write(template.render({'C_DTYPE': ctype,
+                                                  'NP_DTYPE': dtype}))
+                    print 'wrote:', output_path
 
-        with dtype_module.joinpath('__init__.py').open('wb') as output:
-            template_path = device_root.joinpath('dtype.__init__.pyt')
-            template = jinja2.Template(template_path.bytes())
-            output.write(template.render({'C_DTYPE': ctype,
-                                          'NP_DTYPE': dtype}))
 
-    with device_root.joinpath('__init__.py').open('wb') as output:
-        template_path = device_root.joinpath('__init__.pyt')
-        template = jinja2.Template(template_path.bytes())
-        output.write(template.render({'DEVICE_VECTOR_TYPES':
-                                      DEVICE_VECTOR_TYPES}))
+    for f in ('__init__.py', '__init__.pxd', 'copy.pyx', 'count.pyx',
+              'extrema.pyx', 'partition.pyx', 'sort.pyx', 'sum.pyx'):
+        output_path = device_root.joinpath(f)
+        template_path = device_root.joinpath(f + 't')
 
-    with device_root.joinpath('__init__.pxd').open('wb') as output:
-        template_path = device_root.joinpath('__init__.pxdt')
-        template = jinja2.Template(template_path.bytes())
-        output.write(template.render({'DEVICE_VECTOR_TYPES':
-                                      DEVICE_VECTOR_TYPES}))
+        if not output_path.exists() or (output_path.mtime <
+                                        template_path.mtime):
+            with output_path.open('wb') as output:
+                template = jinja2.Template(template_path.bytes())
+                output.write(template.render({'DEVICE_VECTOR_TYPES':
+                                              DEVICE_VECTOR_TYPES,
+                                              'COMMON_DEVICE_VECTOR_TYPES':
+                                              COMMON_DEVICE_VECTOR_TYPES,
+                                              'INTEGRAL_DEVICE_VECTOR_TYPES':
+                                              INTEGRAL_DEVICE_VECTOR_TYPES,
+                                              'FLOAT_DEVICE_VECTOR_TYPES':
+                                              FLOAT_DEVICE_VECTOR_TYPES}))
+                print 'wrote:', output_path
 
 
 @task
