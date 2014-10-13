@@ -21,12 +21,20 @@ cdef extern from "<thrust/partition.h>" namespace "thrust" nogil:
 
 
 cdef extern from "src/partition.h" namespace "thrust" nogil:
-   int counted_partition[InputIterator, Predicate](InputIterator first,
+    int counted_partition[InputIterator, Predicate](InputIterator first,
                                                    InputIterator last,
                                                    Predicate pred)
 
-   int counted_partition_w_stencil 'thrust::counted_partition' [InputIterator1,
-                                                                InputIterator2,
-                                                                Predicate] \
+    int counted_partition_w_stencil 'thrust::counted_partition' \
+        [InputIterator1, InputIterator2, Predicate] \
+        (InputIterator1 first, InputIterator1 last, InputIterator2 last,
+         Predicate pred)
+
+    int counted_stable_partition 'thrust::counted_stable_partition' \
+        [InputIterator, Predicate](InputIterator first, InputIterator last,
+                                   Predicate pred)
+
+    int counted_stable_partition_w_stencil 'thrust::counted_stable_partition' \
+        [InputIterator1, InputIterator2, Predicate] \
         (InputIterator1 first, InputIterator1 last, InputIterator2 last,
          Predicate pred)

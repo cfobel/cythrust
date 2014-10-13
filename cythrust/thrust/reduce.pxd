@@ -11,6 +11,7 @@ cdef extern from "<thrust/reduce.h>" namespace "thrust" nogil:
                                                                  T init_value,
                                                                  BinaryFunction
                                                                  binary_op)
+
     pair[OutputIterator1, OutputIterator2] \
         accumulate_by_key 'thrust::reduce_by_key' \
         [InputIterator1, InputIterator2, OutputIterator1,
