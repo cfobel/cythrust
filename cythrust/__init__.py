@@ -111,6 +111,12 @@ class DeviceDataFrame(object):
             end = self.size
         view = DeviceDataFrame()
         view._data_dict = self._data_dict
+        if len(self._view_dict):
+            sample_view = self._view_dict.values()[0]
+            start += sample_view.first_i
+            end += sample_view.first_i
+            end = min(sample_view.last_i + 1, end)
+        print start, end
         view._view_dict = OrderedDict([(k, dv.view_from_vector(v, start,
                                                                end - 1))
                                         for k, v in
