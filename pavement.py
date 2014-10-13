@@ -1,5 +1,6 @@
 import os
 
+import numpy
 import jinja2
 from paver.easy import task, needs, path, sh
 from paver.setuputils import setup, install_distutils_tasks, find_package_data
@@ -47,7 +48,7 @@ ext_modules = [Extension(f[:-4].replace('/', '.'), [f],
                                              '-fopenmp'],
                          include_dirs=[path('~/local/include').expand(),
                                        '/usr/local/cuda-6.5/include',
-                                       'cythrust'],
+                                       'cythrust', numpy.get_include()],
                          define_macros=[('THRUST_DEVICE_SYSTEM',
                                          'THRUST_DEVICE_SYSTEM_CPP')])
                for f in pyx_files]
