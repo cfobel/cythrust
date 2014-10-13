@@ -1,6 +1,7 @@
 # coding: utf-8
 from collections import OrderedDict
 
+import numpy as np
 import pandas as pd
 import cythrust.device_vector as dv
 
@@ -38,6 +39,25 @@ class DeviceDataFrame(object):
         self._view_dict = OrderedDict([(k, dv.view_from_vector(v))
                                        for k, v in self._data_dict
                                        .iteritems()])
+
+    def add(self, column_name, column_data=None, dtype=None):
+        if dtype is None and column_data is None:
+            raise ValueError('At least one of `column_data` or `dtype` must '
+                             'be provided.')
+        size = self._data_dict.values()[0].size
+        if column_data is None:
+            column_data = np.zeros(size, dtype=dtype)
+        elif dtype is None:
+            column_data = column_data.astype(dtype)
+        self._data_dict[column_name] = dv.from_array(column_data)
+        sample_view = self._view_dict.values()[0]
+        self._view_dict[column_name] = dv.view_from_vector(
+            self._data_dict[column_name], first_i=sample_view.first_i,
+            last_i=sample_view.last_i)
+
+    def drop(self, column_name):
+        del self._view_dict[column_name]
+        del self._data_dict[column_name]
 
     def base(self):
         result = DeviceDataFrame()
