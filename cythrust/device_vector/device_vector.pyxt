@@ -76,26 +76,41 @@ cdef class DeviceVector:
                <{{ C_DTYPE }}*>result.data)
         return result
 
-    def __setslice__(self, i, j, values):
-        if i < 0:
-            i = self.size + i
-        if j < 0:
-            j = self.size + j
-        elif j == sys.maxint:
-            j = self.size
-        assert(i <= j)
-        cdef int N = j - i
-        cdef np.ndarray _values = np.ascontiguousarray(values,
-                                                       dtype={{ NP_DTYPE }})
-        if _values.size == 1:
-            # Input was a single value.
-            fill_n(self._vector.begin() + <size_t>i, N, <{{ C_DTYPE }}>_values[0])
-        elif _values.size == N:
-            copy_n(<{{ C_DTYPE }}*>_values.data, N,
-                   self._vector.begin() + <size_t>i)
+    def __setitem__(self, key_or_slice, value):
+        cdef int N
+        cdef np.ndarray _values
+        if isinstance(key_or_slice, slice):
+            if key_or_slice.step is not None:
+                raise ValueError('Step other than one is not supported.')
+            i = key_or_slice.start
+            j = key_or_slice.stop
+            if i < 0:
+                i = self.size + i
+            if j < 0:
+                j = self.size + j
+            elif j == sys.maxint:
+                j = self.size
+            assert(i <= j)
+            N = j - i
+            assert(N <= self.size)
+            _values = np.ascontiguousarray(value, dtype={{ NP_DTYPE }})
+            if _values.size == 1:
+                # Input was a single value.
+                fill_n(self._vector.begin() + <size_t>i, N, <{{ C_DTYPE }}>_values[0])
+            elif _values.size == N:
+                copy_n(<{{ C_DTYPE }}*>_values.data, N, self._vector.begin() +
+                       <size_t>i)
+            else:
+                raise ValueError('Incorrect slice length.  Expected %d, but got %d'
+                                % (N, _values.size))
         else:
-            raise ValueError('Incorrect slice length.  Expected %d, but got %d'
-                             % (N, _values.size))
+            fill_n(self._vector.begin() + <size_t>key_or_slice, 1, <{{ C_DTYPE }}>value)
+
+    def __str__(self):
+        return str(self[:])
+
+    def __repr__(self):
+        return repr(self[:])
 
     property dtype:
         def __get__(self):
@@ -171,8 +186,35 @@ cdef class DeviceVectorView:
     def __getitem__(self, size_t i):
         return deref(self._begin + i)
 
-    def __setitem__(self, size_t i, {{ C_DTYPE }} value):
-        fill_n(self._begin + i, 1, value)
+    def __setitem__(self, key_or_slice, value):
+        cdef int N
+        cdef np.ndarray _values
+        if isinstance(key_or_slice, slice):
+            if key_or_slice.step is not None:
+                raise ValueError('Step other than one is not supported.')
+            i = key_or_slice.start
+            j = key_or_slice.stop
+            if i < 0:
+                i = self.size + i
+            if j < 0:
+                j = self.size + j
+            elif j == sys.maxint:
+                j = self.size
+            assert(i <= j)
+            N = j - i
+            assert(N <= self.size)
+            _values = np.ascontiguousarray(value, dtype={{ NP_DTYPE }})
+            if _values.size == 1:
+                # Input was a single value.
+                fill_n(self._begin + <size_t>i, N, <{{ C_DTYPE }}>_values[0])
+            elif _values.size == N:
+                copy_n(<{{ C_DTYPE }}*>_values.data, N,
+                    self._begin + <size_t>i)
+            else:
+                raise ValueError('Incorrect slice length.  Expected %d, but got %d'
+                                % (N, _values.size))
+        else:
+            fill_n(self._begin + <size_t>key_or_slice, 1, <{{ C_DTYPE }}>value)
 
     def __getslice__(self, i, j):
         if i < 0:
@@ -187,27 +229,11 @@ cdef class DeviceVectorView:
         copy_n(self._begin + <size_t>i, N, <{{ C_DTYPE }}*>result.data)
         return result
 
-    def __setslice__(self, i, j, values):
-        if i < 0:
-            i = self.size + i
-        if j < 0:
-            j = self.size + j
-        elif j == sys.maxint:
-            j = self.size
-        assert(i <= j)
-        cdef int N = j - i
-        assert(N < self.size)
-        cdef np.ndarray _values = np.ascontiguousarray(values,
-                                                       dtype={{ NP_DTYPE }})
-        if _values.size == 1:
-            # Input was a single value.
-            fill_n(self._begin + <size_t>i, N, <{{ C_DTYPE }}>_values[0])
-        elif _values.size == N:
-            copy_n(<{{ C_DTYPE }}*>_values.data, N,
-                   self._begin + <size_t>i)
-        else:
-            raise ValueError('Incorrect slice length.  Expected %d, but got %d'
-                             % (N, _values.size))
+    def __str__(self):
+        return str(self[:])
+
+    def __repr__(self):
+        return repr(self[:])
 
     property dtype:
         def __get__(self):
