@@ -8,6 +8,8 @@ from .{{ dtype[3:] }}.device_vector import (DeviceVector as DeviceVector{{ dtype
 
 def from_array(data):
 {%- for ctype, dtype in DEVICE_VECTOR_TYPES %}
+    if data.dtype == np.bool:
+        return DeviceVectorUint8.from_array(data)
     {% if loop.first %}if{% else %}elif{% endif %} data.dtype == {{ dtype }}:
         return DeviceVector{{ dtype[3:].title() }}.from_array(data)
 {% endfor %}
