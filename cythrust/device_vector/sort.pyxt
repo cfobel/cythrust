@@ -1,0 +1,26 @@
+# distutils: language = c++
+# cython: embedsignature = True
+
+from libc.stdint cimport (uint8_t, uint16_t, uint32_t, uint64_t, int8_t,
+                          int16_t, int32_t, int64_t)
+from cythrust.thrust.device_vector cimport device_vector
+from cythrust.thrust.sort cimport sort_by_key, sort
+
+{% for ctype, dtype in DEVICE_VECTOR_TYPES -%}
+from cythrust.device_vector cimport DeviceVector{{ dtype[3:].title() }}
+{% endfor %}
+
+
+{% for key_ctype, key_dtype in INTEGRAL_DEVICE_VECTOR_TYPES %}
+    {% for value_ctype, value_dtype in DEVICE_VECTOR_TYPES %}
+cpdef sort_{{ value_dtype[3:] }}_by_{{ key_dtype[3:] }}_key(DeviceVector{{ key_dtype[3:].title() }} keys, DeviceVector{{ value_dtype[3:].title() }} values):
+    sort_by_key(keys._vector.begin(), keys._vector.end(),
+                values._vector.begin())
+    {% endfor %}
+{% endfor %}
+
+
+{% for value_ctype, value_dtype in DEVICE_VECTOR_TYPES %}
+cpdef sort_{{ value_dtype[3:] }}(DeviceVector{{ value_dtype[3:].title() }} values):
+    sort(values._vector.begin(), values._vector.end())
+{% endfor %}
