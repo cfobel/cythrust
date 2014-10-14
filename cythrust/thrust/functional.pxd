@@ -111,3 +111,6 @@ cdef extern from "src/unpack_args.hpp":
 
     cdef cppclass unpack_quinary_args[Functor]:
         unpack_quinary_args(Functor)
+
+    cdef cppclass reverse_divides[T]:
+        pass

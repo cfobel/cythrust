@@ -4,6 +4,17 @@
 namespace cythrust {
 
   template <typename T>
+  struct reverse_divides {
+    typedef T result_type;
+
+    template <typename T1, typename T2>
+    result_type operator() (T1 a, T2 b) {
+      return b / a;
+    }
+  };
+
+
+  template <typename T>
   struct duplicate {
     typedef thrust::tuple<T, T> result_type;
 

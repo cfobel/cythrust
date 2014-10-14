@@ -81,9 +81,13 @@ cdef class DeviceVector:
                 raise ValueError('Step other than one is not supported.')
             i = key_or_slice.start
             j = key_or_slice.stop
-            if i < 0:
+            if i is None:
+                i = 0
+            elif i < 0:
                 i = self.size + i
-            if j < 0:
+            if j is None:
+                j = self.size
+            elif j < 0:
                 j = self.size + j
             elif j == sys.maxint:
                 j = self.size

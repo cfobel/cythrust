@@ -39,12 +39,24 @@ class DeviceVectorCollection(object):
                                        for k, v in self._data_dict
                                        .iteritems()])
 
+    def reorder(self, column_names):
+        if set(column_names).intersection(self.columns) != set(self.columns):
+            raise ValueError('All column names must be provided in reordered '
+                             'list.')
+        if len(set(column_names)) != len(column_names):
+            raise ValueError('Each column name must appear _exactly once_ in '
+                             'the reordered  list.')
+        self._data_dict = OrderedDict([(k, self._data_dict[k])
+                                       for k in column_names])
+        self._view_dict = OrderedDict([(k, self._view_dict[k])
+                                       for k in column_names])
+
     def add(self, column_name, column_data, dtype=None):
         if dtype is None:
             column_data = column_data.astype(dtype)
         self._data_dict[column_name] = dv.from_array(column_data)
         self._view_dict[column_name] = dv.view_from_vector(
-            self._data_dict[column_name], first_i=start, last_i=end)
+            self._data_dict[column_name])
 
     def drop(self, column_name):
         del self._view_dict[column_name]
@@ -199,3 +211,11 @@ class DeviceDataFrame(DeviceVectorCollection):
 
     def views(self):
         return self._view_dict.values()
+
+    def base(self):
+        result = DeviceDataFrame()
+        result._data_dict = self._data_dict
+        result._view_dict = OrderedDict([(k, dv.view_from_vector(v))
+                                         for k, v in result._data_dict
+                                         .iteritems()])
+        return result
