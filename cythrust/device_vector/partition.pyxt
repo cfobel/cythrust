@@ -9,13 +9,13 @@ from cythrust.thrust.functional cimport (positive, negative, non_positive,
                                          non_negative)
 
 {% for ctype, dtype in DEVICE_VECTOR_TYPES -%}
-from cythrust.device_vector cimport DeviceVector{{ dtype[3:].title() }}
+from cythrust.device_vector cimport DeviceVectorView{{ dtype[3:].title() }}
 {% endfor %}
 
 
 {% for op in ['positive', 'negative', 'non_positive', 'non_negative'] %}
     {% for ctype, dtype in COMMON_DEVICE_VECTOR_TYPES %}
-cpdef partition_{{ dtype[3:] }}_{{ op }}(DeviceVector{{ dtype[3:].title() }}
+cpdef partition_{{ dtype[3:] }}_{{ op }}(DeviceVectorView{{ dtype[3:].title() }}
                                          values):
     cdef {{ op }}[{{ ctype }}] _{{ op }}
 
@@ -32,8 +32,8 @@ cpdef partition_{{ dtype[3:] }}_{{ op }}(DeviceVector{{ dtype[3:].title() }}
     {% for ctype, dtype in COMMON_DEVICE_VECTOR_TYPES %}
         {% for stencil_ctype, stencil_dtype in COMMON_DEVICE_VECTOR_TYPES %}
 cpdef partition_{{ dtype[3:] }}_{{ stencil_dtype[3:] }}_stencil_{{ op }}(
-        DeviceVector{{ dtype[3:].title() }} values,
-        DeviceVector{{ stencil_dtype[3:].title() }} stencil):
+        DeviceVectorView{{ dtype[3:].title() }} values,
+        DeviceVectorView{{ stencil_dtype[3:].title() }} stencil):
     cdef {{ op }}[{{ stencil_ctype }}] _{{ op }}
 
     # result_type operator() (T1 j_is_sync, T2 delay_ij, T3 t_a_j) {
@@ -51,8 +51,8 @@ cpdef partition_{{ dtype[3:] }}_{{ stencil_dtype[3:] }}_stencil_{{ op }}(
     {% for ctype, dtype in COMMON_DEVICE_VECTOR_TYPES %}
         {% for stencil_ctype, stencil_dtype in COMMON_DEVICE_VECTOR_TYPES %}
 cpdef partition_n_{{ dtype[3:] }}_{{ stencil_dtype[3:] }}_stencil_{{ op }}(
-        DeviceVector{{ dtype[3:].title() }} values,
-        DeviceVector{{ stencil_dtype[3:].title() }} stencil, size_t N):
+        DeviceVectorView{{ dtype[3:].title() }} values,
+        DeviceVectorView{{ stencil_dtype[3:].title() }} stencil, size_t N):
     cdef {{ op }}[{{ stencil_ctype }}] _{{ op }}
 
     # result_type operator() (T1 j_is_sync, T2 delay_ij, T3 t_a_j) {
@@ -71,8 +71,8 @@ cpdef partition_n_{{ dtype[3:] }}_{{ stencil_dtype[3:] }}_stencil_{{ op }}(
     {% for ctype, dtype in COMMON_DEVICE_VECTOR_TYPES %}
         {% for stencil_ctype, stencil_dtype in COMMON_DEVICE_VECTOR_TYPES %}
 cpdef partition_n_offset_{{ dtype[3:] }}_{{ stencil_dtype[3:] }}_stencil_{{ op }}(
-        DeviceVector{{ dtype[3:].title() }} values,
-        DeviceVector{{ stencil_dtype[3:].title() }} stencil, size_t N,
+        DeviceVectorView{{ dtype[3:].title() }} values,
+        DeviceVectorView{{ stencil_dtype[3:].title() }} stencil, size_t N,
         size_t offset):
     cdef {{ op }}[{{ stencil_ctype }}] _{{ op }}
 

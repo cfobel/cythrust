@@ -11,15 +11,15 @@ from cythrust.thrust.iterator.permutation_iterator cimport \
     make_permutation_iterator
 
 {% for ctype, dtype in DEVICE_VECTOR_TYPES -%}
-from cythrust.device_vector cimport DeviceVector{{ dtype[3:].title() }}
+from cythrust.device_vector cimport DeviceVectorView{{ dtype[3:].title() }}
 {% endfor %}
 
 
 {% for key_ctype, key_dtype in INTEGRAL_DEVICE_VECTOR_TYPES %}
     {% for value_ctype, value_dtype in COMMON_DEVICE_VECTOR_TYPES %}
-cpdef sum_{{ value_dtype[3:] }}_by_{{ key_dtype[3:] }}_key(DeviceVector{{ key_dtype[3:].title() }} keys, DeviceVector{{ value_dtype[3:].title() }} values,
-                            DeviceVector{{ key_dtype[3:].title() }} reduced_keys,
-                            DeviceVector{{ value_dtype[3:].title() }} reduced_values):
+cpdef sum_{{ value_dtype[3:] }}_by_{{ key_dtype[3:] }}_key(DeviceVectorView{{ key_dtype[3:].title() }} keys, DeviceVectorView{{ value_dtype[3:].title() }} values,
+                            DeviceVectorView{{ key_dtype[3:].title() }} reduced_keys,
+                            DeviceVectorView{{ value_dtype[3:].title() }} reduced_values):
     cdef size_t count = (<device_vector[{{ key_ctype }}].iterator>accumulate_by_key(
         keys._vector.begin(), keys._vector.begin() + <size_t>keys.size,
         values._vector.begin(), reduced_keys._vector.begin(),
@@ -31,9 +31,9 @@ cpdef sum_{{ value_dtype[3:] }}_by_{{ key_dtype[3:] }}_key(DeviceVector{{ key_dt
 
 {% for a_ctype, a_dtype in COMMON_DEVICE_VECTOR_TYPES %}
     {% for b_ctype, b_dtype in COMMON_DEVICE_VECTOR_TYPES %}
-cpdef sum_{{ a_dtype[3:] }}_{{ b_dtype[3:] }}(DeviceVector{{ a_dtype[3:].title() }} a,
-                                              DeviceVector{{ b_dtype[3:].title() }} b,
-                                              DeviceVector{{ a_dtype[3:].title() }} output):
+cpdef sum_{{ a_dtype[3:] }}_{{ b_dtype[3:] }}(DeviceVectorView{{ a_dtype[3:].title() }} a,
+                                              DeviceVectorView{{ b_dtype[3:].title() }} b,
+                                              DeviceVectorView{{ a_dtype[3:].title() }} output):
     cdef plus[{{ a_ctype }}] plus_f
 
     transform2(a._vector.begin(), a._vector.end(), b._vector.begin(),
@@ -44,9 +44,9 @@ cpdef sum_{{ a_dtype[3:] }}_{{ b_dtype[3:] }}(DeviceVector{{ a_dtype[3:].title()
 
 {% for a_ctype, a_dtype in INTEGRAL_DEVICE_VECTOR_TYPES %}
     {% for b_ctype, b_dtype in DEVICE_VECTOR_TYPES %}
-cpdef sub_{{ a_dtype[3:] }}_{{ b_dtype[3:] }}(DeviceVector{{ a_dtype[3:].title() }} a,
-                                              DeviceVector{{ b_dtype[3:].title() }} b,
-                                              DeviceVector{{ a_dtype[3:].title() }} output):
+cpdef sub_{{ a_dtype[3:] }}_{{ b_dtype[3:] }}(DeviceVectorView{{ a_dtype[3:].title() }} a,
+                                              DeviceVectorView{{ b_dtype[3:].title() }} b,
+                                              DeviceVectorView{{ a_dtype[3:].title() }} output):
     cdef minus[{{ a_ctype }}] minus_f
 
     transform2(a._vector.begin(), a._vector.end(), b._vector.begin(),
@@ -58,10 +58,10 @@ cpdef sub_{{ a_dtype[3:] }}_{{ b_dtype[3:] }}(DeviceVector{{ a_dtype[3:].title()
 {% for a_ctype, a_dtype in COMMON_DEVICE_VECTOR_TYPES %}
     {% for b_ctype, b_dtype in COMMON_DEVICE_VECTOR_TYPES %}
 cpdef sum_{{ a_dtype[3:] }}_{{ b_dtype[3:] }}_stencil(
-        DeviceVectorInt32 stencil,
-        DeviceVector{{ a_dtype[3:].title() }} a,
-        DeviceVector{{ b_dtype[3:].title() }} b,
-        DeviceVector{{ a_dtype[3:].title() }} output):
+        DeviceVectorViewInt32 stencil,
+        DeviceVectorView{{ a_dtype[3:].title() }} a,
+        DeviceVectorView{{ b_dtype[3:].title() }} b,
+        DeviceVectorView{{ a_dtype[3:].title() }} output):
     cdef plus[{{ a_ctype }}] plus_f
 
     transform2(
@@ -78,10 +78,10 @@ cpdef sum_{{ a_dtype[3:] }}_{{ b_dtype[3:] }}_stencil(
     {% for b_ctype, b_dtype in COMMON_DEVICE_VECTOR_TYPES %}
 cpdef sum_n_{{ a_dtype[3:] }}_{{ b_dtype[3:] }}_stencil(
         size_t N,
-        DeviceVectorInt32 stencil,
-        DeviceVector{{ a_dtype[3:].title() }} a,
-        DeviceVector{{ b_dtype[3:].title() }} b,
-        DeviceVector{{ a_dtype[3:].title() }} output):
+        DeviceVectorViewInt32 stencil,
+        DeviceVectorView{{ a_dtype[3:].title() }} a,
+        DeviceVectorView{{ b_dtype[3:].title() }} b,
+        DeviceVectorView{{ a_dtype[3:].title() }} output):
     cdef plus[{{ a_ctype }}] plus_f
 
     transform2(

@@ -147,6 +147,13 @@ def build_device_vector_cu():
     finally:
         os.chdir(cwd)
 
+    try:
+        os.chdir(device_root)
+        for f in ('copy', 'count', 'extrema', 'partition', 'sort', 'sum'):
+            sh('cython %s.pyx --cplus -I../.. -o %s.cu' % (f, f))
+    finally:
+        os.chdir(cwd)
+
 
 @task
 @needs('build_device_vector_cu')
@@ -155,26 +162,29 @@ def build_device_vector_pyx():
     package_root = path(__file__).abspath().parent
     device_root = package_root.joinpath('cythrust', 'cuda', 'device_vector')
 
+    NVCC_BUILD = ('nvcc -use_fast_math -shared -arch sm_20 --compiler-options '
+                  '"-fPIC -pthread -fno-strict-aliasing -DNDEBUG -g -fwrapv '
+                  '-Wall ' '-Wstrict-prototypes '
+                  '-DTHRUST_DEVICE_SYSTEM=THRUST_DEVICE_SYSTEM_CUDA" '
+                  '-I{home}/local/include -I/usr/local/cuda-6.5/include '
+                  '-I../.. -I/usr/include/python2.7 {namebase}.cu '
+                  '-I%s '
+                  '-o {namebase}.so' % numpy.get_include())
+
     try:
         for ctype, dtype in DEVICE_VECTOR_TYPES:
             dtype_module = device_root.joinpath(dtype[3:])
             os.chdir(dtype_module)
-            sh('nvcc -use_fast_math -shared -arch sm_20 --compiler-options '
-               '"-fPIC -pthread '
-               '-fno-strict-aliasing -DNDEBUG -g -fwrapv -Wall '
-               '-Wstrict-prototypes -fPIC '
-               '-DTHRUST_DEVICE_SYSTEM=THRUST_DEVICE_SYSTEM_CUDA" '
-               '-I%s/local/include -I/usr/local/cuda-6.5/include '
-               '-Icythrust -I/usr/include/python2.7 device_vector.cu '
-               '-o device_vector.so')
-        os.chdir(device_root.parent.joinpath('tests'))
-        sh('nvcc -use_fast_math -shared -arch sm_20 --compiler-options '
-           '"-fPIC -pthread -fno-strict-aliasing -DNDEBUG -g -fwrapv -Wall '
-           '-Wstrict-prototypes '
-           '-DTHRUST_DEVICE_SYSTEM=THRUST_DEVICE_SYSTEM_CUDA" '
-           '-I%s/local/include -I/usr/local/cuda-6.5/include '
-           '-I../.. -I/usr/include/python2.7 test_fusion.cu '
-           '-o test_fusion.so')
+            sh(NVCC_BUILD.format(home=path('~').expand(),
+                                 namebase='device_vector'))
+
+        #os.chdir(device_root.parent.joinpath('tests'))
+        #sh(NVCC_BUILD.format(home=path('~').expand(),
+                              #namebase='test_fusion'))
+
+        os.chdir(device_root)
+        for f in ('copy', 'count', 'extrema', 'partition', 'sort', 'sum'):
+            sh(NVCC_BUILD.format(home=path('~').expand(), namebase=f))
     finally:
         os.chdir(cwd)
 

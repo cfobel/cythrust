@@ -19,3 +19,11 @@ cdef class DeviceVector:
     cdef device_vector[{{ C_DTYPE }}] *_vector
     cdef object dtype
     cdef object ctype
+
+
+cdef class DeviceVectorView:
+    cdef device_vector[{{ C_DTYPE }}] *_vector
+    cdef device_vector[{{ C_DTYPE }}].iterator _begin
+    cdef device_vector[{{ C_DTYPE }}].iterator _end
+    cdef object dtype
+    cdef object ctype
