@@ -1,0 +1,73 @@
+# distutils: language = c++
+# cython: embedsignature = True
+
+from libc.stdint cimport (uint8_t, uint16_t, uint32_t, uint64_t, int8_t,
+                          int16_t, int32_t, int64_t)
+from cythrust.thrust.device_vector cimport device_vector
+from cythrust.thrust.copy cimport copy_if, copy_if_w_stencil, copy_n
+from cythrust.thrust.functional cimport (positive, negative, non_positive,
+                                         non_negative)
+from cythrust.thrust.iterator.permutation_iterator cimport \
+    make_permutation_iterator
+
+{% for ctype, dtype in DEVICE_VECTOR_TYPES -%}
+from cythrust.cuda.device_vector cimport DeviceVectorView{{ dtype[3:].title() }}
+{% endfor %}
+
+
+{% for op in ['positive', 'negative', 'non_positive', 'non_negative'] %}
+    {% for ctype, dtype in COMMON_DEVICE_VECTOR_TYPES %}
+cpdef copy_{{ dtype[3:] }}_if_{{ op }}(DeviceVectorView{{ dtype[3:].title() }} values,
+                                DeviceVectorView{{ dtype[3:].title() }} output):
+    cdef {{ op }}[{{ ctype }}] {{ op }}
+
+    # result_type operator() (T1 j_is_sync, T2 delay_ij, T3 t_a_j) {
+    cdef int32_t count = (<device_vector[{{ ctype }}].iterator>copy_if(
+        values._vector.begin(), values._vector.end(),
+        output._vector.begin(), {{ op }}) - output._vector.begin())
+    return count
+    {% endfor %}
+{% endfor %}
+
+
+
+{% for op in ['positive', 'negative', 'non_positive', 'non_negative'] %}
+    {% for ctype, dtype in COMMON_DEVICE_VECTOR_TYPES %}
+        {% for stencil_ctype, stencil_dtype in COMMON_DEVICE_VECTOR_TYPES %}
+cpdef copy_{{ dtype[3:] }}_if_{{ stencil_dtype[3:] }}_stencil_{{ op }}(
+        DeviceVectorView{{ dtype[3:].title() }} values,
+        DeviceVectorView{{ stencil_dtype[3:].title() }} stencil,
+        DeviceVectorView{{ dtype[3:].title() }} output):
+    cdef {{ op }}[{{ stencil_ctype }}] {{ op }}
+
+    # result_type operator() (T1 j_is_sync, T2 delay_ij, T3 t_a_j) {
+    cdef int32_t count = (<device_vector[{{ ctype }}].iterator>
+        copy_if_w_stencil(values._vector.begin(), values._vector.end(),
+                        stencil._vector.begin(), output._vector.begin(),
+                        {{ op }}) - output._vector.begin())
+    return count
+        {% endfor %}
+    {% endfor %}
+{% endfor %}
+
+
+{% for ctype, dtype in COMMON_DEVICE_VECTOR_TYPES %}
+cpdef permute_{{ dtype[3:] }}(DeviceVectorView{{ dtype[3:].title() }} values,
+                              DeviceVectorViewInt32 index,
+                              DeviceVectorView{{ dtype[3:].title() }} output):
+    # result_type operator() (T1 j_is_sync, T2 delay_ij, T3 t_a_j) {
+    copy_n(make_permutation_iterator(values._vector.begin(),
+                                     index._vector.begin()),
+           <size_t>index.size, output._vector.begin())
+{% endfor %}
+
+
+{% for ctype, dtype in COMMON_DEVICE_VECTOR_TYPES %}
+cpdef permute_n_{{ dtype[3:] }}(DeviceVectorView{{ dtype[3:].title() }} values,
+                                DeviceVectorViewInt32 index, size_t count,
+                                DeviceVectorView{{ dtype[3:].title() }} output):
+    # result_type operator() (T1 j_is_sync, T2 delay_ij, T3 t_a_j) {
+    copy_n(make_permutation_iterator(values._vector.begin(),
+                                     index._vector.begin()), count,
+           output._vector.begin())
+{% endfor %}

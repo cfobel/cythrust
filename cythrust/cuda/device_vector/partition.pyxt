@@ -1,0 +1,88 @@
+# distutils: language = c++
+# cython: embedsignature = True
+
+from libc.stdint cimport (uint8_t, uint16_t, uint32_t, uint64_t, int8_t,
+                          int16_t, int32_t, int64_t)
+from cythrust.thrust.device_vector cimport device_vector
+from cythrust.thrust.partition cimport partition, partition_w_stencil
+from cythrust.thrust.functional cimport (positive, negative, non_positive,
+                                         non_negative)
+
+{% for ctype, dtype in DEVICE_VECTOR_TYPES -%}
+from cythrust.cuda.device_vector cimport DeviceVectorView{{ dtype[3:].title() }}
+{% endfor %}
+
+
+{% for op in ['positive', 'negative', 'non_positive', 'non_negative'] %}
+    {% for ctype, dtype in COMMON_DEVICE_VECTOR_TYPES %}
+cpdef partition_{{ dtype[3:] }}_{{ op }}(DeviceVectorView{{ dtype[3:].title() }}
+                                         values):
+    cdef {{ op }}[{{ ctype }}] _{{ op }}
+
+    # result_type operator() (T1 j_is_sync, T2 delay_ij, T3 t_a_j) {
+    cdef int32_t count = (<device_vector[{{ ctype }}].iterator>partition(
+        values._vector.begin(), values._vector.end(), _{{ op }}) -
+        values._vector.begin())
+    return count
+    {% endfor %}
+{% endfor %}
+
+
+{% for op in ['positive', 'negative', 'non_positive', 'non_negative'] %}
+    {% for ctype, dtype in COMMON_DEVICE_VECTOR_TYPES %}
+        {% for stencil_ctype, stencil_dtype in COMMON_DEVICE_VECTOR_TYPES %}
+cpdef partition_{{ dtype[3:] }}_{{ stencil_dtype[3:] }}_stencil_{{ op }}(
+        DeviceVectorView{{ dtype[3:].title() }} values,
+        DeviceVectorView{{ stencil_dtype[3:].title() }} stencil):
+    cdef {{ op }}[{{ stencil_ctype }}] _{{ op }}
+
+    # result_type operator() (T1 j_is_sync, T2 delay_ij, T3 t_a_j) {
+    cdef int32_t count = (<device_vector[{{ ctype }}].iterator>
+        partition_w_stencil(values._vector.begin(), values._vector.end(),
+                            stencil._vector.begin(), _{{ op }}) -
+        values._vector.begin())
+    return count
+        {% endfor %}
+    {% endfor %}
+{% endfor %}
+
+
+{% for op in ['positive', 'negative', 'non_positive', 'non_negative'] %}
+    {% for ctype, dtype in COMMON_DEVICE_VECTOR_TYPES %}
+        {% for stencil_ctype, stencil_dtype in COMMON_DEVICE_VECTOR_TYPES %}
+cpdef partition_n_{{ dtype[3:] }}_{{ stencil_dtype[3:] }}_stencil_{{ op }}(
+        DeviceVectorView{{ dtype[3:].title() }} values,
+        DeviceVectorView{{ stencil_dtype[3:].title() }} stencil, size_t N):
+    cdef {{ op }}[{{ stencil_ctype }}] _{{ op }}
+
+    # result_type operator() (T1 j_is_sync, T2 delay_ij, T3 t_a_j) {
+    cdef int32_t count = (
+        <device_vector[{{ ctype }}].iterator>
+        partition_w_stencil(values._vector.begin(), values._vector.begin() + N,
+                            stencil._vector.begin(), _{{ op }}) -
+        values._vector.begin())
+    return count
+        {% endfor %}
+    {% endfor %}
+{% endfor %}
+
+
+{% for op in ['positive', 'negative', 'non_positive', 'non_negative'] %}
+    {% for ctype, dtype in COMMON_DEVICE_VECTOR_TYPES %}
+        {% for stencil_ctype, stencil_dtype in COMMON_DEVICE_VECTOR_TYPES %}
+cpdef partition_n_offset_{{ dtype[3:] }}_{{ stencil_dtype[3:] }}_stencil_{{ op }}(
+        DeviceVectorView{{ dtype[3:].title() }} values,
+        DeviceVectorView{{ stencil_dtype[3:].title() }} stencil, size_t N,
+        size_t offset):
+    cdef {{ op }}[{{ stencil_ctype }}] _{{ op }}
+
+    # result_type operator() (T1 j_is_sync, T2 delay_ij, T3 t_a_j) {
+    cdef int32_t count = (
+        <device_vector[{{ ctype }}].iterator>
+        partition_w_stencil(values._vector.begin() + N, values._vector.begin()
+                            + N + offset, stencil._vector.begin(), _{{ op }}) -
+        values._vector.begin())
+    return count
+        {% endfor %}
+    {% endfor %}
+{% endfor %}
