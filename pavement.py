@@ -2,9 +2,10 @@ import os
 
 import numpy
 import jinja2
-from paver.easy import task, needs, path, sh
+from paver.easy import task, needs, path, sh, cmdopts
 from paver.setuputils import setup, install_distutils_tasks, find_package_data
 from distutils.extension import Extension
+from optparse import make_option
 
 import version
 
@@ -156,20 +157,25 @@ def build_device_vector_cu():
 
 
 @task
+@cmdopts([
+    make_option('-a', '--arch', help='CUDA architecture to compile for '
+                '_(e.g., `sm_20`, `sm_13`, etc.)_.')
+])
 @needs('build_device_vector_cu')
-def build_device_vector_pyx():
+def build_device_vector_pyx(options):
+    arch = options['build_device_vector_pyx'].get('arch', 'sm_20')
     cwd = os.getcwd()
     package_root = path(__file__).abspath().parent
     device_root = package_root.joinpath('cythrust', 'cuda', 'device_vector')
 
-    NVCC_BUILD = ('nvcc -use_fast_math -shared -arch sm_20 --compiler-options '
+    NVCC_BUILD = ('nvcc -use_fast_math -shared -arch %s --compiler-options '
                   '"-fPIC -pthread -fno-strict-aliasing -DNDEBUG -g -fwrapv '
                   '-Wall ' '-Wstrict-prototypes '
                   '-DTHRUST_DEVICE_SYSTEM=THRUST_DEVICE_SYSTEM_CUDA" '
                   '-I{home}/local/include -I/usr/local/cuda-6.5/include '
                   '-I../.. -I/usr/include/python2.7 {namebase}.cu '
                   '-I%s '
-                  '-o {namebase}.so' % numpy.get_include())
+                  '-o {namebase}.so' % (arch, numpy.get_include()))
 
     try:
         for ctype, dtype in DEVICE_VECTOR_TYPES:
