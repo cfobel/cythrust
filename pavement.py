@@ -145,13 +145,14 @@ def build_device_vector_cu():
             sh('cython device_vector.pyx --cplus -I../.. -o device_vector.cu')
         os.chdir(device_root.parent.joinpath('tests'))
         sh('cython test_fusion.pyx --cplus -I../.. -o test_fusion.cu')
-    finally:
-        os.chdir(cwd)
 
-    try:
         os.chdir(device_root)
         for f in ('copy', 'count', 'extrema', 'partition', 'sort', 'sum'):
             sh('cython %s.pyx --cplus -I../.. -o %s.cu' % (f, f))
+
+        os.chdir(device_root.parent)
+        for f in ('cycudart', ):
+            sh('cython %s.pyx --cplus -I.. -o %s.cu' % (f, f))
     finally:
         os.chdir(cwd)
 
