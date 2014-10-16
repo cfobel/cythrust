@@ -1,1 +1,1 @@
-from .device_vector import DeviceVector
+from .device_vector import DeviceVectorView

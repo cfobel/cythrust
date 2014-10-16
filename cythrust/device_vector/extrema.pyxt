@@ -11,16 +11,16 @@ from cythrust.thrust.tuple cimport make_tuple2
 from cythrust.thrust.functional cimport equal_to, duplicate, minmax_tuple
 
 {% for ctype, dtype in DEVICE_VECTOR_TYPES -%}
-from cythrust.device_vector cimport DeviceVector{{ dtype[3:].title() }}
+from cythrust.device_vector cimport DeviceVectorView{{ dtype[3:].title() }}
 {% endfor %}
 
 
 {% for ctype, dtype in DEVICE_VECTOR_TYPES %}
-cpdef minmax_{{ dtype[3:] }}_by_key(DeviceVectorInt32 keys,
-                                DeviceVector{{ dtype[3:].title() }} values,
-                                DeviceVectorInt32 reduced_keys,
-                                DeviceVector{{ dtype[3:].title() }} min_values,
-                                DeviceVector{{ dtype[3:].title() }} max_values):
+cpdef minmax_{{ dtype[3:] }}_by_key(DeviceVectorViewInt32 keys,
+                                DeviceVectorView{{ dtype[3:].title() }} values,
+                                DeviceVectorViewInt32 reduced_keys,
+                                DeviceVectorView{{ dtype[3:].title() }} min_values,
+                                DeviceVectorView{{ dtype[3:].title() }} max_values):
     cdef duplicate[{{ ctype }}] duplicate_f
     cdef minmax_tuple[{{ ctype }}] minmax_f
     cdef equal_to[int32_t] reduce_compare  # Functor to compare reduction keys.

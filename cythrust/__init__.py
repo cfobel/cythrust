@@ -5,6 +5,11 @@ import numpy as np
 import pandas as pd
 import cythrust.device_vector as dv
 
+try:
+    import cythrust.cuda.device_vector as cu_dv
+except ImportError:
+    cu_dv = None
+
 
 class DeviceVectorCollection(object):
     '''
@@ -22,12 +27,13 @@ class DeviceVectorCollection(object):
 
      - Only numeric types are accepted.
     '''
-    def __init__(self, data=None):
+    def __init__(self, data=None, allocator=dv):
+        self._allocator = allocator
         if isinstance(data, dict):
-            self._data_dict = OrderedDict([(k, dv.from_array(v))
+            self._data_dict = OrderedDict([(k, self._allocator.from_array(v))
                                            for k, v in data.iteritems()])
         elif isinstance(data, pd.DataFrame):
-            self._data_dict = OrderedDict([(c, dv.from_array(data[c]
+            self._data_dict = OrderedDict([(c, self._allocator.from_array(data[c]
                                                              .values))
                                            for c in data.columns])
         elif data is None:
@@ -35,7 +41,7 @@ class DeviceVectorCollection(object):
         elif data is not None:
             raise ValueError('Unsupported input data type.')
 
-        self._view_dict = OrderedDict([(k, dv.view_from_vector(v))
+        self._view_dict = OrderedDict([(k, self._allocator.view_from_vector(v))
                                        for k, v in self._data_dict
                                        .iteritems()])
 
@@ -54,8 +60,8 @@ class DeviceVectorCollection(object):
     def add(self, column_name, column_data, dtype=None):
         if dtype is None:
             column_data = column_data.astype(dtype)
-        self._data_dict[column_name] = dv.from_array(column_data)
-        self._view_dict[column_name] = dv.view_from_vector(
+        self._data_dict[column_name] = self._allocator.from_array(column_data)
+        self._view_dict[column_name] = self._allocator.view_from_vector(
             self._data_dict[column_name])
 
     def drop(self, column_name):
@@ -65,7 +71,7 @@ class DeviceVectorCollection(object):
     def base(self):
         result = DeviceVectorCollection()
         result._data_dict = self._data_dict
-        result._view_dict = OrderedDict([(k, dv.view_from_vector(v))
+        result._view_dict = OrderedDict([(k, self._allocator.view_from_vector(v))
                                          for k, v in result._data_dict
                                          .iteritems()])
         return result
@@ -111,10 +117,10 @@ class DeviceDataFrame(DeviceVectorCollection):
 
      - Only numeric types are accepted.
     '''
-    def __init__(self, data=None):
+    def __init__(self, data=None, allocator=dv):
         if isinstance(data, dict):
             assert(len(set([v.size for v in data.itervalues()])) == 1)
-        super(DeviceDataFrame, self).__init__(data)
+        super(DeviceDataFrame, self).__init__(data, allocator)
 
     def add(self, column_name, column_data=None, dtype=None):
         if dtype is None and column_data is None:
@@ -131,7 +137,7 @@ class DeviceDataFrame(DeviceVectorCollection):
             column_data = np.zeros(size, dtype=dtype)
         elif dtype is not None:
             column_data = column_data.astype(dtype)
-        self._data_dict[column_name] = dv.from_array(column_data)
+        self._data_dict[column_name] = self._allocator.from_array(column_data)
         if len(self._view_dict):
             sample_view = self._view_dict.values()[0]
             start = sample_view.first_i
@@ -139,7 +145,7 @@ class DeviceDataFrame(DeviceVectorCollection):
         else:
             start = 0
             end = self._data_dict.values()[0].size - 1
-        self._view_dict[column_name] = dv.view_from_vector(
+        self._view_dict[column_name] = self._allocator.view_from_vector(
             self._data_dict[column_name], first_i=start, last_i=end)
 
     def as_dataframe(self):
@@ -203,7 +209,7 @@ class DeviceDataFrame(DeviceVectorCollection):
             start += sample_view.first_i
             end += sample_view.first_i
             end = min(sample_view.last_i + 1, end)
-        view._view_dict = OrderedDict([(k, dv.view_from_vector(v, start,
+        view._view_dict = OrderedDict([(k, self._allocator.view_from_vector(v, start,
                                                                end - 1))
                                         for k, v in
                                         self._data_dict.iteritems()])
@@ -215,7 +221,7 @@ class DeviceDataFrame(DeviceVectorCollection):
     def base(self):
         result = DeviceDataFrame()
         result._data_dict = self._data_dict
-        result._view_dict = OrderedDict([(k, dv.view_from_vector(v))
+        result._view_dict = OrderedDict([(k, self._allocator.view_from_vector(v))
                                          for k, v in result._data_dict
                                          .iteritems()])
         return result

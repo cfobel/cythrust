@@ -2,9 +2,10 @@ import os
 
 import numpy
 import jinja2
-from paver.easy import task, needs, path, sh
+from paver.easy import task, needs, path, sh, cmdopts
 from paver.setuputils import setup, install_distutils_tasks, find_package_data
 from distutils.extension import Extension
+from optparse import make_option
 
 import version
 
@@ -144,37 +145,53 @@ def build_device_vector_cu():
             sh('cython device_vector.pyx --cplus -I../.. -o device_vector.cu')
         os.chdir(device_root.parent.joinpath('tests'))
         sh('cython test_fusion.pyx --cplus -I../.. -o test_fusion.cu')
+
+        os.chdir(device_root)
+        for f in ('copy', 'count', 'extrema', 'partition', 'sort', 'sum'):
+            sh('cython %s.pyx --cplus -I../.. -o %s.cu' % (f, f))
+
+        os.chdir(device_root.parent)
+        for f in ('cycudart', ):
+            sh('cython %s.pyx --cplus -I.. -o %s.cu' % (f, f))
     finally:
         os.chdir(cwd)
 
 
 @task
+@cmdopts([
+    make_option('-a', '--arch', help='CUDA architecture to compile for '
+                '_(e.g., `sm_20`, `sm_13`, etc.)_.')
+])
 @needs('build_device_vector_cu')
-def build_device_vector_pyx():
+def build_device_vector_pyx(options):
+    arch = options['build_device_vector_pyx'].get('arch', 'sm_20')
     cwd = os.getcwd()
     package_root = path(__file__).abspath().parent
     device_root = package_root.joinpath('cythrust', 'cuda', 'device_vector')
+
+    NVCC_BUILD = ('nvcc -use_fast_math -shared -arch %s --compiler-options '
+                  '"-fPIC -pthread -fno-strict-aliasing -DNDEBUG -g -fwrapv '
+                  '-Wall ' '-Wstrict-prototypes '
+                  '-DTHRUST_DEVICE_SYSTEM=THRUST_DEVICE_SYSTEM_CUDA" '
+                  '-I{home}/local/include -I/usr/local/cuda-6.5/include '
+                  '-I../.. -I/usr/include/python2.7 {namebase}.cu '
+                  '-I%s '
+                  '-o {namebase}.so' % (arch, numpy.get_include()))
 
     try:
         for ctype, dtype in DEVICE_VECTOR_TYPES:
             dtype_module = device_root.joinpath(dtype[3:])
             os.chdir(dtype_module)
-            sh('nvcc -use_fast_math -shared -arch sm_20 --compiler-options '
-               '"-fPIC -pthread '
-               '-fno-strict-aliasing -DNDEBUG -g -fwrapv -Wall '
-               '-Wstrict-prototypes -fPIC '
-               '-DTHRUST_DEVICE_SYSTEM=THRUST_DEVICE_SYSTEM_CUDA" '
-               '-I%s/local/include -I/usr/local/cuda-6.5/include '
-               '-Icythrust -I/usr/include/python2.7 device_vector.cu '
-               '-o device_vector.so')
-        os.chdir(device_root.parent.joinpath('tests'))
-        sh('nvcc -use_fast_math -shared -arch sm_20 --compiler-options '
-           '"-fPIC -pthread -fno-strict-aliasing -DNDEBUG -g -fwrapv -Wall '
-           '-Wstrict-prototypes '
-           '-DTHRUST_DEVICE_SYSTEM=THRUST_DEVICE_SYSTEM_CUDA" '
-           '-I%s/local/include -I/usr/local/cuda-6.5/include '
-           '-I../.. -I/usr/include/python2.7 test_fusion.cu '
-           '-o test_fusion.so')
+            sh(NVCC_BUILD.format(home=path('~').expand(),
+                                 namebase='device_vector'))
+
+        #os.chdir(device_root.parent.joinpath('tests'))
+        #sh(NVCC_BUILD.format(home=path('~').expand(),
+                              #namebase='test_fusion'))
+
+        os.chdir(device_root)
+        for f in ('copy', 'count', 'extrema', 'partition', 'sort', 'sum'):
+            sh(NVCC_BUILD.format(home=path('~').expand(), namebase=f))
     finally:
         os.chdir(cwd)
 
