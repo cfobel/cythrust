@@ -86,6 +86,9 @@ cdef extern from "src/functional.hpp" namespace "cythrust" nogil:
     cdef cppclass square[T]:
         pass
 
+    cdef cppclass reduce_plus4_with_dummy[T]:
+        pass
+
     cdef cppclass reduce_plus4[T]:
         pass
 

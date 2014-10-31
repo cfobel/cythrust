@@ -7,6 +7,7 @@ struct unpack_binary_args {
   typedef typename Functor::result_type result_type;
   Functor functor_;
 
+  __host__ __device__
   unpack_binary_args(Functor functor) : functor_(functor) {}
 
   template <typename Tuple>
@@ -22,6 +23,7 @@ struct unpack_ternary_args {
   typedef typename Functor::result_type result_type;
   Functor functor_;
 
+  __host__ __device__
   unpack_ternary_args(Functor functor) : functor_(functor) {}
 
   template <typename Tuple>
@@ -38,6 +40,7 @@ struct unpack_quaternary_args {
   typedef typename Functor::result_type result_type;
   Functor functor_;
 
+  __host__ __device__
   unpack_quaternary_args(Functor functor) : functor_(functor) {}
 
   template <typename Tuple>
@@ -54,6 +57,7 @@ struct unpack_quinary_args {
   typedef typename Functor::result_type result_type;
   Functor functor_;
 
+  __host__ __device__
   unpack_quinary_args(Functor functor) : functor_(functor) {}
 
   template <typename Tuple>

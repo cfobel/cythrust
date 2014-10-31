@@ -3,7 +3,7 @@
 
 #include <limits>
 #include <iostream>
-#include <cstdint>
+#include <stdint.h>
 
 #ifndef __host__
 #define CUDA_HOST_DEVICE

@@ -3,12 +3,16 @@
 
 from libc.stdint cimport (uint8_t, uint16_t, uint32_t, uint64_t, int8_t,
                           int16_t, int32_t, int64_t)
+from cython.operator import dereference as deref
 from cythrust.thrust.device_vector cimport device_vector
-from cythrust.thrust.reduce cimport reduce_by_key
-from cythrust.thrust.iterator.transform_iterator cimport make_transform_iterator
+from cythrust.thrust.reduce cimport reduce_by_key, reduce
+from cythrust.thrust.iterator.transform_iterator cimport \
+    make_transform_iterator
 from cythrust.thrust.iterator.zip_iterator cimport make_zip_iterator
 from cythrust.thrust.tuple cimport make_tuple2
-from cythrust.thrust.functional cimport equal_to, duplicate, minmax_tuple
+from cythrust.thrust.extrema cimport max_element
+from cythrust.thrust.functional cimport (equal_to, duplicate, minmax_tuple,
+                                         maximum, absolute)
 
 {% for ctype, dtype in DEVICE_VECTOR_TYPES -%}
 from cythrust.cuda.device_vector cimport DeviceVectorView{{ dtype[3:].title() }}
@@ -35,4 +39,18 @@ cpdef minmax_{{ dtype[3:] }}_by_key(DeviceVectorViewInt32 keys,
                         max_values._vector.begin())),
         reduce_compare, minmax_f).first) - reduced_keys._vector.begin())
     return count
+{% endfor %}
+
+
+{% for ctype, dtype in DEVICE_VECTOR_TYPES %}
+cpdef max_abs_{{ dtype[3:] }}(DeviceVectorView{{ dtype[3:].title() }} values):
+    cdef {{ ctype }} result
+    cdef absolute[{{ ctype }}] absolute_f
+    cdef maximum[{{ ctype }}] maximum_f
+
+    result = reduce(
+        make_transform_iterator(values._vector.begin(), absolute_f),
+        make_transform_iterator(values._vector.end(), absolute_f),
+        0, maximum_f)
+    return result
 {% endfor %}
