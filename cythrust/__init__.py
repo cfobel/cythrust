@@ -193,6 +193,12 @@ class DeviceDataFrame(DeviceVectorCollection):
         return self._view_dict.values()[0].size
 
     def view(self, start, end=None):
+        '''
+        Return a view corresponding to the specified slice of the views
+        dictionary items.
+
+        *N.B.,* No data is copied.
+        '''
         if end is None:
             start = 0
             end = start
