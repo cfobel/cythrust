@@ -73,7 +73,7 @@ setup(name='cythrust',
       package_data=find_package_data('cythrust', package='cythrust',
                                      only_in_packages=False),
       ext_modules=ext_modules,
-      install_requires=['pandas', 'Cybuild'])
+      install_requires=['pandas', 'Cybuild', 'jinja2'])
 
 
 @task

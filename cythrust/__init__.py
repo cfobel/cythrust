@@ -1,14 +1,163 @@
 # coding: utf-8
 from collections import OrderedDict
+import sys
 
+import pkg_resources
 import numpy as np
-import pandas as pd
-import cythrust.device_vector as dv
+#import cythrust.device_vector as dv
+from Cybuild import Context as _Context
+from path_helpers import path
+import jinja2
+import functools32
+try:
+    import pandas as pd
+except:
+    pass
 
 try:
     import cythrust.cuda.device_vector as cu_dv
 except ImportError:
     cu_dv = None
+
+
+NP_TYPE_TO_CTYPE = OrderedDict([('int8', 'int8_t'),
+                                ('uint8', 'uint8_t'),
+                                ('int16', 'int16_t'),
+                                ('uint16', 'uint16_t'),
+                                ('int32', 'int32_t'),
+                                ('uint32', 'uint32_t'),
+                                ('int64', 'int64_t'),
+                                ('uint64', 'uint64_t'),
+                                ('float32', 'float'),
+                                ('float', 'double'),
+                                ('float64', 'double')])
+
+
+class Context(_Context):
+    '''
+    Sub-class `Cybuild` context to build dynamic Cython extensions with
+    `thrust`-specific settings.
+    '''
+    template_path = path(pkg_resources
+                         .resource_filename('cythrust',
+                                            'template'))
+    LIB_PATH = path('~/.cache/cythrust/lib').expand()
+    if str(LIB_PATH) not in sys.path:
+        sys.path.insert(0, str(LIB_PATH))
+    PKG_PATH = path(pkg_resources.resource_filename('cythrust', ''))
+
+    def __init__(self, device_system='THRUST_DEVICE_SYSTEM_CPP', tag='', **kwargs):
+        '''
+        Parameters
+        ----------
+
+        `device_system` : `str`, optional
+         * A Thrust [device backend][1].
+
+        `tag` : `str`, optional
+         * Optional tag string to differentiate between variants using the
+           same Thrust device backend.
+         * __NB__, Compile arguments may be passed through the remaining `kwargs`.
+
+        [1]: https://github.com/thrust/thrust/wiki/Device-Backends
+        '''
+        super(Context, self).__init__(**kwargs)
+        self.tag = tag
+        self.device_system = device_system
+        self.kwargs = {'define_macros': [('THRUST_DEVICE_SYSTEM',
+                                          device_system)],
+                       'pyx_kwargs': {'cplus': True},
+                       'include_dirs': [self.PKG_PATH]}
+        if self.device_system == 'THRUST_DEVICE_SYSTEM_TBB':
+            self.kwargs['extra_link_args'] = ['-ltbb']
+
+    def build_pyx(self, *args, **kwargs):
+        _kwargs = self.kwargs.copy()
+        _kwargs.update(kwargs)
+
+        return super(Context, self).build_pyx(*args, **_kwargs)
+
+    def inline_pyx_module(self, *args, **kwargs):
+        _kwargs = self.kwargs.copy()
+        _kwargs.update(kwargs)
+
+        return super(Context, self).inline_pyx_module(*args, **_kwargs)
+
+    def from_array(self, array, dtype=None):
+        if dtype is None:
+            dtype = array.dtype
+        vector_class = self.get_device_vector_class(dtype)
+        return vector_class.from_array(array)
+
+    def clear_cache(self):
+        self.get_device_vector_class.cache_clear()
+        self.get_device_vector_module.cache_clear()
+        self.get_device_vector_view_class.cache_clear()
+
+    @functools32.lru_cache()
+    def get_device_vector_class(self, dtype):
+        vector_module_name =  self.get_device_vector_module(dtype)
+        exec('from %s import DeviceVector as _vector_class'
+             % vector_module_name)
+        return _vector_class
+
+    @functools32.lru_cache()
+    def get_device_vector_view_class(self, dtype):
+        vector_module_name =  self.get_device_vector_module(dtype)
+        exec('from %s import DeviceVectorView as _view_class'
+             % vector_module_name)
+        return _view_class
+
+    @functools32.lru_cache()
+    def get_device_vector_module(self, dtype):
+        if isinstance(dtype, np.dtype):
+            dtype = dtype.type
+        np_dtype = 'np.' + dtype.__name__
+        c_dtype = NP_TYPE_TO_CTYPE[dtype.__name__]
+        system_key = self.device_system.split('_')[-1].lower()
+        if self.tag:
+            system_key += '_%s' % self.tag
+        full_module_name = '.'.join(['device_vector', system_key,
+                                     np_dtype[3:]])
+        try:
+            exec('import %s' % full_module_name)
+            return full_module_name
+        except ImportError:
+            pass
+
+        pyx_dir = self.LIB_PATH.joinpath('device_vector',
+                                         system_key, np_dtype[3:])
+        pyx_dir.makedirs_p()
+
+        for d in (pyx_dir.parent.parent.parent,
+                  pyx_dir.parent.parent, pyx_dir.parent, pyx_dir):
+            d.joinpath('__init__.pxd').write_bytes('')
+            d.joinpath('__init__.py').write_bytes('')
+
+        pyx_template_path = self.template_path.joinpath(
+            'device_vector.pyxt')
+        pyx_source_path = pyx_dir.joinpath(pyx_template_path.name[:-1])
+
+        with pyx_source_path.open('wb') as output:
+            template = jinja2.Template(pyx_template_path.bytes())
+            output.write(template.render(C_DTYPE=c_dtype,
+                                         NP_DTYPE=np_dtype))
+
+        pxd_template_path = self.template_path.joinpath(
+            'device_vector.pxdt')
+        pxd_source_path = pyx_dir.joinpath(pxd_template_path.name[:-1])
+
+        with pxd_source_path.open('wb') as output:
+            template = jinja2.Template(pxd_template_path.bytes())
+            output.write(template.render(C_DTYPE=c_dtype,
+                                         NP_DTYPE=np_dtype))
+
+        pyx_dir.joinpath('__init__.py').write_bytes(
+            'from device_vector import *')
+
+        module_dir, module_name = self.build_pyx(pyx_source_path,
+                                                 module_dir=pyx_dir)
+        return full_module_name
 
 
 class DeviceVectorCollection(object):
@@ -27,21 +176,23 @@ class DeviceVectorCollection(object):
 
      - Only numeric types are accepted.
     '''
-    def __init__(self, data=None, allocator=dv):
-        self._allocator = allocator
+    def __init__(self, data=None, context=None):
+        if context is None:
+            context = Context()
+        self._context = context
         if isinstance(data, dict):
-            self._data_dict = OrderedDict([(k, self._allocator.from_array(v))
+            self._data_dict = OrderedDict([(k, self._context.from_array(v))
                                            for k, v in data.iteritems()])
         elif isinstance(data, pd.DataFrame):
-            self._data_dict = OrderedDict([(c, self._allocator.from_array(data[c]
-                                                             .values))
+            self._data_dict = OrderedDict([(c, self._context
+                                            .from_array(data[c].values))
                                            for c in data.columns])
         elif data is None:
             self._data_dict = OrderedDict()
         elif data is not None:
             raise ValueError('Unsupported input data type.')
 
-        self._view_dict = OrderedDict([(k, self._allocator.view_from_vector(v))
+        self._view_dict = OrderedDict([(k, v.view())
                                        for k, v in self._data_dict
                                        .iteritems()])
 
@@ -60,9 +211,8 @@ class DeviceVectorCollection(object):
     def add(self, column_name, column_data, dtype=None):
         if dtype is None:
             column_data = column_data.astype(dtype)
-        self._data_dict[column_name] = self._allocator.from_array(column_data)
-        self._view_dict[column_name] = self._allocator.view_from_vector(
-            self._data_dict[column_name])
+        self._data_dict[column_name] = self._context.from_array(column_data)
+        self._view_dict[column_name] = self._data_dict[column_name].view()
 
     def drop(self, column_name):
         del self._view_dict[column_name]
@@ -71,7 +221,7 @@ class DeviceVectorCollection(object):
     def base(self):
         result = DeviceVectorCollection()
         result._data_dict = self._data_dict
-        result._view_dict = OrderedDict([(k, self._allocator.view_from_vector(v))
+        result._view_dict = OrderedDict([(k, v.view())
                                          for k, v in result._data_dict
                                          .iteritems()])
         return result
@@ -88,8 +238,7 @@ class DeviceVectorCollection(object):
         return self._view_dict
 
     def __getitem__(self, key):
-        # TODO: Return view?
-        return self._view_dict[key][:]
+        return self._view_dict[key]
 
     @property
     def columns(self):
@@ -117,10 +266,10 @@ class DeviceDataFrame(DeviceVectorCollection):
 
      - Only numeric types are accepted.
     '''
-    def __init__(self, data=None, allocator=dv):
+    def __init__(self, data=None, context=None):
         if isinstance(data, dict):
             assert(len(set([v.size for v in data.itervalues()])) == 1)
-        super(DeviceDataFrame, self).__init__(data, allocator)
+        super(DeviceDataFrame, self).__init__(data, context)
 
     def add(self, column_name, column_data=None, dtype=None):
         if dtype is None and column_data is None:
@@ -137,7 +286,7 @@ class DeviceDataFrame(DeviceVectorCollection):
             column_data = np.zeros(size, dtype=dtype)
         elif dtype is not None:
             column_data = column_data.astype(dtype)
-        self._data_dict[column_name] = self._allocator.from_array(column_data)
+        self._data_dict[column_name] = self._context.from_array(column_data)
         if len(self._view_dict):
             sample_view = self._view_dict.values()[0]
             start = sample_view.first_i
@@ -145,8 +294,8 @@ class DeviceDataFrame(DeviceVectorCollection):
         else:
             start = 0
             end = self._data_dict.values()[0].size - 1
-        self._view_dict[column_name] = self._allocator.view_from_vector(
-            self._data_dict[column_name], first_i=start, last_i=end)
+        self._view_dict[column_name] = self._data_dict[column_name].view(
+            first_i=start, last_i=end)
 
     def as_dataframe(self):
         return pd.DataFrame(OrderedDict([(k, v[:])
@@ -184,9 +333,9 @@ class DeviceDataFrame(DeviceVectorCollection):
         lbound, ubound = self.index_bounds()
         return (i >= lbound and i < ubound and lbound < ubound)
 
-    def __getitem__(self, key):
-        # TODO: Return view?
-        return self.as_dataframe()[key]
+    @property
+    def df(self):
+        return self.as_dataframe()
 
     @property
     def size(self):
@@ -215,8 +364,7 @@ class DeviceDataFrame(DeviceVectorCollection):
             start += sample_view.first_i
             end += sample_view.first_i
             end = min(sample_view.last_i + 1, end)
-        view._view_dict = OrderedDict([(k, self._allocator.view_from_vector(v, start,
-                                                               end - 1))
+        view._view_dict = OrderedDict([(k, v.view(start, end - 1))
                                         for k, v in
                                         self._data_dict.iteritems()])
         return view
@@ -227,7 +375,7 @@ class DeviceDataFrame(DeviceVectorCollection):
     def base(self):
         result = DeviceDataFrame()
         result._data_dict = self._data_dict
-        result._view_dict = OrderedDict([(k, self._allocator.view_from_vector(v))
+        result._view_dict = OrderedDict([(k, v.view())
                                          for k, v in result._data_dict
                                          .iteritems()])
         return result
