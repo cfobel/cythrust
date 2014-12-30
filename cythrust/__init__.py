@@ -1,5 +1,5 @@
 # coding: utf-8
-from collections import OrderedDict
+from collections import OrderedDict, Container
 import sys
 
 import pkg_resources
@@ -237,6 +237,24 @@ class DeviceVectorCollection(object):
 
     def as_arrays(self):
         return OrderedDict([(k, v[:]) for k, v in self._view_dict.iteritems()])
+
+    def get_vector_class(self, column):
+        return self._get_scalar_or_list(column,
+                                        self._context.get_device_vector_class)
+
+    def get_vector_view_class(self, column):
+        return self._get_scalar_or_list(column,
+                                        self._context.get_device_vector_view_class)
+
+    def get_vector_module(self, column):
+        return self._get_scalar_or_list(column,
+                                        self._context.get_device_vector_module)
+
+    def _get_scalar_or_list(self, column, func):
+        if not isinstance(column, str) and isinstance(column, Container):
+            return [func(self.v[c].dtype) for c in column]
+        else:
+            return func(self.v[column].dtype)
 
     @property
     def d(self):
