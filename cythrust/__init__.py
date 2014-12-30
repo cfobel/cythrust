@@ -278,7 +278,7 @@ class DeviceVectorCollection(object):
         return self._view_dict
 
     def __getitem__(self, key):
-        return self._view_dict[key]
+        return self._get_scalar_or_list(key, lambda c: c)
 
     @property
     def columns(self):
@@ -420,13 +420,77 @@ class DeviceDataFrame(DeviceVectorCollection):
                                          .iteritems()])
         return result
 
+    def sort(self, column=None, key=None, stable=False):
+        '''
+        Sort values in specified column(s) by the values specified key
+        column(s).
+
+        If no column or key is specified, the rows across all columns will be
+        sorted, based on the order of the columns as they appear in the
+        `columns` attribute.
+
+        If no `key` columns are specified, the values in the `column` column(s)
+        are sorted while leaving all other columns *untouched*.
+        '''
+        if column is None:
+            if key is not None:
+                raise ValueError('If column is not specified, `key` must not '
+                                 'be specified, either.')
+            columns = tuple(self.columns)
+        elif isinstance(column, str):
+            columns = (column, )
+        else:
+            columns = tuple(column)
+
+        if key is None:
+            # If no columns were specified to sort by, interpret `column` as
+            # key columns to sort by.
+            key = columns
+            columns = tuple()
+        elif isinstance(key, str):
+            key = (key, )
+        else:
+            key = tuple(key)
+
+        sort_func = self.get_sort_func(key_columns=key, value_columns=columns,
+                                       stable=stable)
+        sort_func(*self[key + columns])
+
     @functools32.lru_cache()
-    def get_sort_func(self, key_columns, value_columns=None):
+    def get_sort_func(self, key_columns, value_columns=None, stable=False):
+        '''
+        Dynamically compile a Thrust Cython sort function based on the types of
+        the specified key and value columns for sorting.
+
+        __NB,__ Results of this function are cached to improve runtime
+        performance of repeated calls for the same columns/column types.
+        '''
         if value_columns is None:
             value_columns = []
-        template = jinja2.Template(SORT_TEMPLATE)
-        code = template.render(df=self, key_columns=key_columns,
-                               value_columns=value_columns)
-        module_path, module_name = self._context.inline_pyx_module(code)
-        exec('from %s import sort_func as __sort_func__' % module_name)
-        return __sort_func__
+        key_modules = tuple(self.get_vector_module(key_columns))
+        value_modules = tuple(self.get_vector_module(value_columns))
+        key_dtypes = tuple(self.get_dtype(key_columns))
+        value_dtypes = tuple(self.get_dtype(value_columns))
+
+        return get_sort_func(self._context, key_modules, key_dtypes,
+                             value_modules, value_dtypes, stable=stable)
+
+
+@functools32.lru_cache()
+def get_sort_func(context, key_modules, key_dtypes, value_modules=None,
+                  value_dtypes=None, stable=False):
+    if value_modules is None or value_dtypes is None:
+        value_modules = []
+        value_dtypes = []
+
+    template = jinja2.Template(SORT_TEMPLATE)
+    code = template.render(key_modules=key_modules, key_dtypes=key_dtypes,
+                           value_modules=value_modules,
+                           value_dtypes=value_dtypes, stable=stable)
+    try:
+        module_path, module_name = context.inline_pyx_module(code)
+    except:
+        print code
+        raise
+    exec('from %s import sort_func as __sort_func__' % module_name)
+    return __sort_func__

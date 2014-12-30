@@ -18,3 +18,10 @@ cdef extern from "<thrust/sort.h>" namespace "thrust" nogil:
                                                   StrictWeakOrdering] \
         (RandomAccessIterator1 keys_first, RandomAccessIterator1 keys_last,
          RandomAccessIterator2 values_first, StrictWeakOrdering comp)
+    void stable_sort_by_key [RandomAccessIterator1, RandomAccessIterator2] \
+        (RandomAccessIterator1 keys_first, RandomAccessIterator1 keys_last,
+         RandomAccessIterator2 values_first)
+    void stable_sort_by_key_by_op 'thrust::stable_sort_by_key' \
+        [RandomAccessIterator1, RandomAccessIterator2, StrictWeakOrdering] \
+        (RandomAccessIterator1 keys_first, RandomAccessIterator1 keys_last,
+         RandomAccessIterator2 values_first, StrictWeakOrdering comp)
