@@ -13,7 +13,7 @@ try:
     import pandas as pd
 except:
     pass
-from .template import SORT_TEMPLATE
+from .template import SORT_TEMPLATE, BASE_TEMPLATE
 
 
 NP_TYPE_TO_CTYPE = OrderedDict([('int8', 'int8_t'),
@@ -27,6 +27,15 @@ NP_TYPE_TO_CTYPE = OrderedDict([('int8', 'int8_t'),
                                 ('float32', 'float'),
                                 ('float', 'double'),
                                 ('float64', 'double')])
+
+
+class Functor(object):
+    def __init__(self, code, func):
+        self.code = code
+        self.func = func
+
+    def __call__(self, *args, **kwargs):
+        self.func(*args, **kwargs)
 
 
 def get_includes():
@@ -492,6 +501,48 @@ class DeviceDataFrame(DeviceVectorCollection):
 
         return get_sort_func(self._context, key_modules, key_dtypes,
                              value_modules, value_dtypes, stable=stable)
+
+    def inline_func(self, columns, code='', setup='', context=None,
+                    verbose=False, **kwargs):
+        '''
+        Return a dynamically compiled Cython function, based on the
+        `BASE_TEMPLATE` template.
+
+        Argument types are implied by the data-type of each column, where each
+        column is represented by the corresponding `DeviceVectorView` type.
+
+        Arguments
+        ---------
+
+         - `columns` : `list`-like
+          * Column names to pass as arguments to generated function.
+         - `code` : `str` *(optional)*
+          * Code to insert in function body.  May contain Jinja
+            template language.
+         - `setup` : `str` *(optional)*
+          * Set-up code to insert at start of template.  May contain Jinja
+            template language.
+         - `context` : `dict` *(optional)*
+          * Context to add to Jinja template context.
+         - `verbose` : `bool` *(optional)*
+          * If `True`, generated code will be printed.
+         - `kwargs` : `dict` *(optional)*
+          * Additional keyword arguments to pass along to `inline_pyx_module`.
+        '''
+        template = jinja2.Template('\n'.join([setup, BASE_TEMPLATE, code]))
+
+        if context is None:
+            context = {}
+        all_code = template.render(
+            df=self, module_names=self.get_vector_module(columns),
+            dtypes=self.get_dtype(columns), view_names=columns,
+            **context)
+        module_path, module_name = self._context.inline_pyx_module(all_code,
+                                                                   **kwargs)
+        if verbose:
+            print all_code
+        exec('import %s' % module_name)
+        return Functor(all_code, eval('%s.__foo__' % module_name))
 
 
 @functools32.lru_cache()

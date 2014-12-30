@@ -86,3 +86,27 @@ def sort_func(
         {%- endif %})
 {%- endif %}
 '''
+
+
+# The following template serves as a base for implementing a custom function
+# accepting one or more `DeviceVectorView` arguments.
+BASE_TEMPLATE = '''
+from libc.stdint cimport (int8_t, int16_t, int32_t, int64_t,
+                          uint8_t, uint16_t, uint32_t, uint64_t)
+from cythrust.thrust.iterator.zip_iterator cimport make_zip_iterator
+from cythrust.thrust.tuple cimport
+{%- for i in range(2, 8) %} make_tuple{{ i }}
+{%- if not loop.last %},{% endif -%}
+{% endfor %}
+{% for m in module_names -%}
+from {{ m }}.device_vector cimport DeviceVectorView as {{ dtypes[loop.index0].__name__.title() }}View
+{% endfor %}
+
+def {% if func_name %}{{ func_name }}{% else %}__foo__{% endif %} (
+        {{ preargs }}
+        {%- for d in dtypes -%}
+        {{ d.__name__.title() }}View {% if view_names %}{{ view_names[loop.index0] }}{% else %}view{{ loop.index }}{% endif %}
+        {%- if not loop.last %},{% endif %}
+        {% endfor -%}
+        {{ postargs }}):
+    pass'''
