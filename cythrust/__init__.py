@@ -4,7 +4,6 @@ import sys
 
 import pkg_resources
 import numpy as np
-#import cythrust.device_vector as dv
 from Cybuild import Context as _Context
 from path_helpers import path
 import jinja2
@@ -13,11 +12,6 @@ try:
     import pandas as pd
 except:
     pass
-
-try:
-    import cythrust.cuda.device_vector as cu_dv
-except ImportError:
-    cu_dv = None
 
 
 NP_TYPE_TO_CTYPE = OrderedDict([('int8', 'int8_t'),
@@ -33,6 +27,10 @@ NP_TYPE_TO_CTYPE = OrderedDict([('int8', 'int8_t'),
                                 ('float64', 'double')])
 
 
+def get_includes():
+    return [pkg_resources.resource_filename('cythrust', '')]
+
+
 class Context(_Context):
     '''
     Sub-class `Cybuild` context to build dynamic Cython extensions with
@@ -44,9 +42,9 @@ class Context(_Context):
     LIB_PATH = path('~/.cache/cythrust/lib').expand()
     if str(LIB_PATH) not in sys.path:
         sys.path.insert(0, str(LIB_PATH))
-    PKG_PATH = path(pkg_resources.resource_filename('cythrust', ''))
 
-    def __init__(self, device_system='THRUST_DEVICE_SYSTEM_CPP', tag='', **kwargs):
+    def __init__(self, device_system='THRUST_DEVICE_SYSTEM_CPP', tag='',
+                 include_dirs=None, **kwargs):
         '''
         Parameters
         ----------
@@ -64,10 +62,18 @@ class Context(_Context):
         super(Context, self).__init__(**kwargs)
         self.tag = tag
         self.device_system = device_system
-        self.kwargs = {'define_macros': [('THRUST_DEVICE_SYSTEM',
-                                          device_system)],
-                       'pyx_kwargs': {'cplus': True},
-                       'include_dirs': [self.PKG_PATH]}
+        if include_dirs is None:
+            include_dirs = []
+        self.kwargs = {'pyx_kwargs': {'cplus': True},
+                       'include_dirs': include_dirs + get_includes()}
+        if self.device_system in ('THRUST_DEVICE_SYSTEM_CPP',
+                                  'THRUST_DEVICE_SYSTEM_TBB'):
+            self.kwargs.update({'define_macros': [('THRUST_DEVICE_SYSTEM',
+                                                   device_system)],
+                                'include_dirs': get_includes()})
+        elif self.device_system == 'THRUST_DEVICE_SYSTEM_CUDA':
+            self.kwargs['preargs'] = ['-D' + self.device_system]
+            self.kwargs['include_dirs'] = get_includes()
         if self.device_system == 'THRUST_DEVICE_SYSTEM_TBB':
             self.kwargs['extra_link_args'] = ['-ltbb']
 
