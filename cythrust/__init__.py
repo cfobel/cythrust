@@ -1,6 +1,7 @@
 # coding: utf-8
 from collections import OrderedDict, Container
 import sys
+from ConfigParser import NoOptionError, NoSectionError
 
 import pkg_resources
 import numpy as np
@@ -67,19 +68,36 @@ class Context(_Context):
         self.tag = tag
         self.device_system = device_system
         if include_dirs is None:
-            include_dirs = []
+            include_dirs = self.include_dirs
         self.kwargs = {'pyx_kwargs': {'cplus': True},
                        'include_dirs': include_dirs + get_includes()}
         if self.device_system in ('THRUST_DEVICE_SYSTEM_CPP',
                                   'THRUST_DEVICE_SYSTEM_TBB'):
             self.kwargs.update({'define_macros': [('THRUST_DEVICE_SYSTEM',
                                                    device_system)],
-                                'include_dirs': get_includes()})
+                                'extra_compile_args': ['-O3']})
         elif self.device_system == 'THRUST_DEVICE_SYSTEM_CUDA':
-            self.kwargs['preargs'] = ['-D' + self.device_system]
-            self.kwargs['include_dirs'] = get_includes()
+            self.kwargs['preargs'] = ['-O3', '-D' + self.device_system]
         if self.device_system == 'THRUST_DEVICE_SYSTEM_TBB':
             self.kwargs['extra_link_args'] = ['-ltbb']
+
+    @property
+    def include_dirs(self):
+        try:
+            value = self.config.get('paths', 'include_dirs')
+            if isinstance(value, str):
+                value = eval(value)
+            return [str(path(d).expand()) for d in value]
+        except NoSectionError:
+            self.config.add_section('paths')
+        except NoOptionError:
+            pass
+        self.include_dirs = []
+        return self.include_dirs
+
+    @include_dirs.setter
+    def include_dirs(self, value):
+        self.config.set('paths', 'include_dirs', value)
 
     def build_pyx(self, *args, **kwargs):
         _kwargs = self.kwargs.copy()
