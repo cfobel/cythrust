@@ -4,7 +4,7 @@ import sys
 
 import pkg_resources
 import numpy as np
-from Cybuild import Context as _Context
+from Cybuild import Context as _Context, NvccBuilder
 from path_helpers import path
 import jinja2
 import functools32
@@ -59,6 +59,9 @@ class Context(_Context):
 
         [1]: https://github.com/thrust/thrust/wiki/Device-Backends
         '''
+        if device_system == 'THRUST_DEVICE_SYSTEM_CUDA':
+            if 'builder' not in kwargs:
+                kwargs['builder'] = NvccBuilder()
         super(Context, self).__init__(**kwargs)
         self.tag = tag
         self.device_system = device_system
