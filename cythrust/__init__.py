@@ -12,6 +12,7 @@ try:
     import pandas as pd
 except:
     pass
+from .template import SORT_TEMPLATE
 
 
 NP_TYPE_TO_CTYPE = OrderedDict([('int8', 'int8_t'),
@@ -240,21 +241,33 @@ class DeviceVectorCollection(object):
 
     def get_vector_class(self, column):
         return self._get_scalar_or_list(column,
-                                        self._context.get_device_vector_class)
+                                        lambda x:
+                                        self._context
+                                        .get_device_vector_class(x.dtype))
 
     def get_vector_view_class(self, column):
         return self._get_scalar_or_list(column,
-                                        self._context.get_device_vector_view_class)
+                                        lambda x:
+                                        self._context
+                                        .get_device_vector_view_class(x.dtype))
 
     def get_vector_module(self, column):
         return self._get_scalar_or_list(column,
-                                        self._context.get_device_vector_module)
+                                        lambda x:
+                                        self._context
+                                        .get_device_vector_module(x.dtype))
+
+    def get_dtype(self, column):
+        return self._get_scalar_or_list(column, lambda x: x.dtype)
+
+    def get_ctype(self, column):
+        return self._get_scalar_or_list(column, lambda x: x.ctype)
 
     def _get_scalar_or_list(self, column, func):
         if not isinstance(column, str) and isinstance(column, Container):
-            return [func(self.v[c].dtype) for c in column]
+            return [func(self.v[c]) for c in column]
         else:
-            return func(self.v[column].dtype)
+            return func(self.v[column])
 
     @property
     def d(self):
@@ -406,3 +419,14 @@ class DeviceDataFrame(DeviceVectorCollection):
                                          for k, v in result._data_dict
                                          .iteritems()])
         return result
+
+    @functools32.lru_cache()
+    def get_sort_func(self, key_columns, value_columns=None):
+        if value_columns is None:
+            value_columns = []
+        template = jinja2.Template(SORT_TEMPLATE)
+        code = template.render(df=self, key_columns=key_columns,
+                               value_columns=value_columns)
+        module_path, module_name = self._context.inline_pyx_module(code)
+        exec('from %s import sort_func as __sort_func__' % module_name)
+        return __sort_func__
