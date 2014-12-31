@@ -1,4 +1,0 @@
-{% for ctype, dtype in DEVICE_VECTOR_TYPES -%}
-from cythrust.cuda.device_vector.{{ dtype[3:] }}.device_vector cimport (DeviceVector as DeviceVector{{ dtype[3:].title() }},
-                                                                   DeviceVectorView as DeviceVectorView{{ dtype[3:].title() }})
-{% endfor %}
