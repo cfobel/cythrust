@@ -7,6 +7,18 @@
 namespace cythrust {
 
   template <typename T>
+  struct power {
+    typedef T result_type;
+
+    template <typename T1, typename T2>
+    __host__ __device__
+    result_type operator() (T1 a, T2 b) {
+      return pow(a, b);
+    }
+  };
+
+
+  template <typename T>
   struct reverse_divides {
     typedef T result_type;
 
@@ -73,6 +85,15 @@ namespace cythrust {
 
     __host__ __device__
     T operator() (T a) { return a * a; }
+  };
+
+
+  template <typename T>
+  struct square_root {
+    typedef T result_type;
+
+    __host__ __device__
+    T operator() (T a) { return sqrtf(a); }
   };
 
 
