@@ -33,9 +33,10 @@ class Functor(object):
     def __init__(self, code, func):
         self.code = code
         self.func = func
+        self.__doc__ = func.__doc__
 
     def __call__(self, *args, **kwargs):
-        self.func(*args, **kwargs)
+        return self.func(*args, **kwargs)
 
 
 def get_includes():
