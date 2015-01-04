@@ -2,6 +2,7 @@
 #define ___CYTHRUST__FUNCTIONAL__HPP___
 
 #include <thrust/tuple.h>
+#include <math.h>
 
 
 namespace cythrust {
@@ -228,6 +229,188 @@ namespace cythrust {
     template <typename T1>
     __host__ __device__
     result_type operator() (T1 v) { return v < value; }
+  };
+
+
+  template <typename T>
+  struct acos_ {
+    typedef T result_type;
+
+    template <typename T1>
+    __host__ __device__
+    result_type operator() (T1 v) {
+      return acosf(v);
+    }
+  };
+
+
+  template <typename T>
+  struct asin_ {
+    typedef T result_type;
+
+    template <typename T1>
+    __host__ __device__
+    result_type operator() (T1 v) {
+      return asinf(v);
+    }
+  };
+
+
+  template <typename T>
+  struct atan_ {
+    typedef T result_type;
+
+    template <typename T1>
+    __host__ __device__
+    result_type operator() (T1 v) {
+      return atanf(v);
+    }
+  };
+
+
+  template <typename T>
+  struct atan2_ {
+    typedef T result_type;
+
+    template <typename T1>
+    __host__ __device__
+    result_type operator() (T1 v) {
+      return atan2f(v);
+    }
+  };
+
+
+  template <typename T>
+  struct cos_ {
+    typedef T result_type;
+
+    template <typename T1>
+    __host__ __device__
+    result_type operator() (T1 v) {
+      return cosf(v);
+    }
+  };
+
+
+  template <typename T>
+  struct sin_ {
+    typedef T result_type;
+
+    template <typename T1>
+    __host__ __device__
+    result_type operator() (T1 v) {
+      return sinf(v);
+    }
+  };
+
+
+  template <typename T>
+  struct tan_ {
+    typedef T result_type;
+
+    template <typename T1>
+    __host__ __device__
+    result_type operator() (T1 v) {
+      return tanf(v);
+    }
+  };
+
+
+  template <typename T>
+  struct cosh_ {
+    typedef T result_type;
+
+    template <typename T1>
+    __host__ __device__
+    result_type operator() (T1 v) {
+      return coshf(v);
+    }
+  };
+
+
+  template <typename T>
+  struct sinh_ {
+    typedef T result_type;
+
+    template <typename T1>
+    __host__ __device__
+    result_type operator() (T1 v) {
+      return sinhf(v);
+    }
+  };
+
+
+  template <typename T>
+  struct tanh_ {
+    typedef T result_type;
+
+    template <typename T1>
+    __host__ __device__
+    result_type operator() (T1 v) {
+      return tanhf(v);
+    }
+  };
+
+
+  template <typename T>
+  struct ceil_ {
+    typedef T result_type;
+
+    template <typename T1>
+    __host__ __device__
+    result_type operator() (T1 v) { return ceilf(v); }
+  };
+
+
+  template <typename T>
+  struct floor_ {
+    typedef T result_type;
+
+    template <typename T1>
+    __host__ __device__
+    result_type operator() (T1 v) { return floorf(v); }
+  };
+
+
+  template <typename T>
+  struct trunc_ {
+    typedef T result_type;
+
+    template <typename T1>
+    __host__ __device__
+    result_type operator() (T1 v) { return (v >= 0) ? floorf(v) : -floorf(-v); }
+  };
+
+
+  template <typename T>
+  struct inv_ {
+    typedef T result_type;
+
+    template <typename T1>
+    __host__ __device__
+    result_type operator() (T1 v) { return 1. / v; }
+  };
+
+
+  template <typename T>
+  struct sign {
+    typedef T result_type;
+
+    template <typename T1>
+    __host__ __device__
+    result_type operator() (T1 v) { return (v >= 0) ? 1 : -1; }
+  };
+
+
+  template <typename T>
+  struct switch_ {
+    typedef T result_type;
+
+    template <typename T1, typename T2, typename T3>
+    __host__ __device__
+    result_type operator() (T1 a, T2 b, T3 c) {
+      return (a) ? b : c;
+    }
   };
 }
 

@@ -3,6 +3,8 @@ cdef extern from "<thrust/functional.h>" namespace "thrust" nogil:
         pass
     cdef cppclass binary_function[Argument1, Argument2, Result]:
         pass
+
+    # ## Binary ##
     cdef cppclass plus[T]:
         pass
     cdef cppclass minus[T]:
@@ -12,8 +14,6 @@ cdef extern from "<thrust/functional.h>" namespace "thrust" nogil:
     cdef cppclass divides[T]:
         pass
     cdef cppclass modulus[T]:
-        pass
-    cdef cppclass negate[T]:
         pass
     cdef cppclass equal_to[T]:
         pass
@@ -31,27 +31,33 @@ cdef extern from "<thrust/functional.h>" namespace "thrust" nogil:
         pass
     cdef cppclass logical_or[T]:
         pass
-    cdef cppclass logical_not[T]:
-        pass
     cdef cppclass bit_and[T]:
         pass
     cdef cppclass bit_or[T]:
         pass
     cdef cppclass bit_xor[T]:
         pass
-    cdef cppclass identity[T]:
-        pass
     cdef cppclass maximum[T]:
         pass
     cdef cppclass minimum[T]:
         pass
-    cdef cppclass project1st[T1, T2]:
+
+    # ## Unary ##
+    cdef cppclass negate[T]:
         pass
-    cdef cppclass project2nd[T1, T2]:
+    cdef cppclass logical_not[T]:
         pass
+    cdef cppclass identity[T]:
+        pass
+
+    # ## Other ##
     cdef cppclass unary_negate[Predicate]:
         pass
     cdef cppclass binary_negate[Predicate]:
+        pass
+    cdef cppclass project1st[T1, T2]:
+        pass
+    cdef cppclass project2nd[T1, T2]:
         pass
 
 
