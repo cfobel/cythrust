@@ -1,6 +1,7 @@
 # coding: utf-8
-from collections import OrderedDict, Container
 import sys
+import hashlib
+from collections import OrderedDict, Container
 from ConfigParser import NoOptionError, NoSectionError
 
 import pkg_resources
@@ -41,6 +42,99 @@ class Functor(object):
 
 def get_includes():
     return [pkg_resources.resource_filename('cythrust', '')]
+
+
+class Transform(object):
+    """
+    Generate the following sources files defining a Thrust transform iterator
+    for the specified operation graph:
+
+     - C++ header containing transform iterator class with `begin` method to
+       return the starting iterator of the transform output.
+     - Cython header *(i.e., `.pxd`)* containing definition of class defined in
+       C++ header.  This definition provides a convenient way to use the C++
+       transform class in Cython code.
+     - Python and Cython `__init__` files to make the specified `output_dir` a
+       module.
+
+    __NB__ The `get_includes` method returns the path of the module where the
+    C++ `.hpp` file resides.  This makes it easy to include the header path
+    when compiling Cython code that uses the transform class.
+
+    Example
+    -------
+
+    >>> from cythrust import DeviceDataFrame
+    >>> import pandas as pd
+    >>> import theano.tensor as T
+    >>> import theano
+    >>>
+    >>> N = 10
+    >>> host_df = pd.DataFrame({'a': np.arange(N, dtype='uint8'),
+    ...                         'b': np.arange(N, dtype='uint8')},
+    ...                        columns=list('ab'))
+    >>> df = DeviceDataFrame(host_df)
+    >>> a, b = df.tensor(['a', 'b'])
+    >>>
+    >>> # `build_transform` automatically adds the `Foo` module parent directory
+    >>> # to the Python path so we can import from it.
+    >>> foo_transform = df._context.build_transform(2 * a, 'Foo')
+    >>> foo = df.inline_func(df.columns,
+    ...     setup='''
+    ... from Foo.Foo cimport Foo
+    ... from cythrust.thrust.copy cimport copy_n''',
+    ...     include_dirs=foo_transform.get_includes(),
+    ...     code = '''
+    ...     cdef Foo *op
+    ...     op = new Foo(<Foo.a_t>a._begin)
+    ...     cdef size_t N = a._end - a._begin
+    ...     copy_n(op.begin(), N, b._begin)
+    ...     return N''') # doctest:+ELLIPSIS
+    ...
+    >>> print foo(df['a'], df['b'])
+    10
+    >>> print foo_transform.__doc__
+    (TensorConstant{2} * a)
+    >>> print df.df[:].T
+       0  1  2  3  4   5   6   7   8   9
+    a  0  1  2  3  4   5   6   7   8   9
+    b  0  2  4  6  8  10  12  14  16  18
+    """
+    def __init__(self, operation_graph, functor_name, output_dir):
+        import tempfile
+        import theano
+        from theano_helpers import DataFlowGraph, ThrustCode
+
+        self.dfg = DataFlowGraph(operation_graph)
+        self.thrust_code = ThrustCode(self.dfg)
+
+        code = self.thrust_code.header_code(functor_name)
+        hash_label = hashlib.sha1(code).hexdigest()[:12]
+
+        output_dir.makedirs_p()
+
+        py_init_path = output_dir.joinpath('__init__.py')
+        cy_init_path = output_dir.joinpath('__init__.pxd')
+        header_path = output_dir.joinpath('%s.hpp' % hash_label)
+        cyheader_path = output_dir.joinpath('%s.pxd' % functor_name)
+
+        with header_path.open('wb') as output:
+            output.write(code)
+        with cyheader_path.open('wb') as output:
+            output.write(self.thrust_code.cython_header_code(
+                functor_name, '"%s.hpp"' % hash_label))
+        py_init_path.touch()
+        cy_init_path.touch()
+
+        self.__doc__ = str(theano.pp(operation_graph))
+        self.output_dir = path(output_dir).expand().abspath()
+        self.functor_name = functor_name
+
+        if not self.output_dir.parent in sys.path:
+            sys.path.insert(0, str(self.output_dir.parent))
+
+    def get_includes(self):
+        return [self.output_dir]
 
 
 class Context(_Context):
@@ -114,6 +208,23 @@ class Context(_Context):
         _kwargs.update(kwargs)
 
         return super(Context, self).build_pyx(*args, **_kwargs)
+
+    def build_transform(self, operation_graph, transform_name,
+                        module_name=None):
+        '''
+         - Generate C++ header file with Thrust transform iterator definition
+           which implements the specified operation graph.
+         - Generate Cython header file *(i.e., `.pxd`)* which includes
+           transform class definition.
+         - Add files to a directory with the specified `module_name` within the
+           current context library path root.  This should place the module on
+           the Python path.
+        '''
+        if module_name is None:
+            module_name = transform_name
+        output_dir = self.LIB_PATH.joinpath(module_name)
+        transform = Transform(operation_graph, transform_name, output_dir)
+        return transform
 
     def inline_pyx_module(self, *args, **kwargs):
         _kwargs = self.kwargs.copy()
@@ -291,11 +402,17 @@ class DeviceVectorCollection(object):
     def get_ctype(self, column):
         return self._get_scalar_or_list(column, lambda x: x.ctype)
 
-    def _get_scalar_or_list(self, column, func):
+    def _get_scalar_or_list(self, column, func, include_name=False):
         if not isinstance(column, str) and isinstance(column, Container):
-            return [func(self.v[c]) for c in column]
+            if include_name:
+                return [func(c, self.v[c]) for c in column]
+            else:
+                return [func(self.v[c]) for c in column]
         else:
-            return func(self.v[column])
+            if include_name:
+                return func(column, self.v[column])
+            else:
+                return func(self.v[column])
 
     @property
     def d(self):
@@ -401,6 +518,14 @@ class DeviceDataFrame(DeviceVectorCollection):
         lbound, ubound = self.index_bounds()
         return (i >= lbound and i < ubound and lbound < ubound)
 
+    def tensor(self, column):
+        import theano.tensor as T
+
+        return self._get_scalar_or_list(column, lambda column, view:
+                                        T.vector(column,
+                                                 dtype=view.dtype.__name__),
+                                        include_name=True)
+
     @property
     def df(self):
         return self.as_dataframe()
@@ -504,7 +629,7 @@ class DeviceDataFrame(DeviceVectorCollection):
                              value_modules, value_dtypes, stable=stable)
 
     def inline_func(self, columns, code='', setup='', context=None,
-                    verbose=False, **kwargs):
+                    verbose=False, include_dirs=None, **kwargs):
         '''
         Return a dynamically compiled Cython function, based on the
         `BASE_TEMPLATE` template.
@@ -538,8 +663,12 @@ class DeviceDataFrame(DeviceVectorCollection):
             df=self, module_names=self.get_vector_module(columns),
             dtypes=self.get_dtype(columns), view_names=columns,
             **context)
-        module_path, module_name = self._context.inline_pyx_module(all_code,
-                                                                   **kwargs)
+        if include_dirs is None:
+            include_dirs = self._context.kwargs['include_dirs']
+        else:
+            include_dirs += self._context.kwargs['include_dirs']
+        module_path, module_name = self._context.inline_pyx_module(
+            all_code, include_dirs=include_dirs, **kwargs)
         if verbose:
             print all_code
         exec('import %s' % module_name)
