@@ -65,8 +65,8 @@ namespace cythrust {
       return thrust::make_tuple(
           (thrust::get<0>(a) < thrust::get<0>(b)) ? thrust::get<0>(a)
                                                   : thrust::get<0>(b),
-          (thrust::get<0>(a) < thrust::get<0>(b)) ? thrust::get<0>(b)
-                                                  : thrust::get<0>(a));
+          (thrust::get<1>(a) < thrust::get<1>(b)) ? thrust::get<1>(b)
+                                                  : thrust::get<1>(a));
     }
   };
 
