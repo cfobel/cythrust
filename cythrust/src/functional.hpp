@@ -8,6 +8,30 @@
 namespace cythrust {
 
   template <typename T>
+  struct first {
+    typedef T result_type;
+
+    template <typename T1>
+    __host__ __device__
+    result_type operator() (T1 a) {
+      return thrust::get<0>(a);
+    }
+  };
+
+
+  template <typename T>
+  struct second {
+    typedef T result_type;
+
+    template <typename T1>
+    __host__ __device__
+    result_type operator() (T1 a) {
+      return thrust::get<1>(a);
+    }
+  };
+
+
+  template <typename T>
   struct power {
     typedef T result_type;
 

@@ -107,6 +107,12 @@ cdef extern from "src/functional.hpp" namespace "cythrust" nogil:
     cdef cppclass plus_tuple5[T]:
         pass
 
+    cdef cppclass first[T]:
+        T operator()[T1](T1 a)
+
+    cdef cppclass second[T]:
+        T operator()[T1](T1 a)
+
 
 cdef extern from "src/unpack_args.hpp":
     cdef cppclass unpack_binary_args[Functor]:
