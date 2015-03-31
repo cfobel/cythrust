@@ -80,6 +80,58 @@ namespace cythrust {
 
 
   template <typename T>
+  struct min2_tuple {
+    typedef thrust::tuple<T, T> result_type;
+
+    template <typename T1, typename T2>
+    __host__ __device__
+    result_type operator() (T1 const &a, T2 const &b) {
+      //     [     a0         a1           b0                  b1       ]
+      if (thrust::get<1>(a) < thrust::get<0>(b)) {
+        return a;
+      //     [     b0         b1           a0                  a1       ]
+      } else if (thrust::get<1>(b) < thrust::get<0>(a)) {
+        return b;
+      //     [     a0         b0           a1                  b1       ]
+      //     [     a0         b0           b1                  a1       ]
+      } else if (thrust::get<0>(a) < thrust::get<0>(b)) {
+        return thrust::make_tuple(thrust::get<0>(a), thrust::get<0>(b));
+      //     [     b0         a0           a1                  b1       ]
+      //     [     b0         a0           b1                  a1       ]
+      } else {
+        return thrust::make_tuple(thrust::get<0>(b), thrust::get<0>(a));
+      }
+    }
+  };
+
+
+  template <typename T>
+  struct max2_tuple {
+    typedef thrust::tuple<T, T> result_type;
+
+    template <typename T1, typename T2>
+    __host__ __device__
+    result_type operator() (T1 const &a, T2 const &b) {
+      //     [     a0         a1           b0                  b1       ]
+      if (thrust::get<1>(a) < thrust::get<0>(b)) {
+        return thrust::make_tuple(thrust::get<0>(b), thrust::get<1>(b));
+      //     [     b0         b1           a0                  a1       ]
+      } else if (thrust::get<1>(b) < thrust::get<0>(a)) {
+        return thrust::make_tuple(thrust::get<0>(a), thrust::get<1>(a));
+      //     [     a0         b0           a1                  b1       ]
+      //     [     b0         a0           a1                  b1       ]
+      } else if (thrust::get<1>(a) < thrust::get<1>(b)) {
+        return thrust::make_tuple(thrust::get<1>(a), thrust::get<1>(b));
+      //     [     a0         b0           b1                  a1       ]
+      //     [     b0         a0           b1                  a1       ]
+      } else {
+        return thrust::make_tuple(thrust::get<1>(b), thrust::get<1>(a));
+      }
+    }
+  };
+
+
+  template <typename T>
   struct minmax_tuple {
     typedef thrust::tuple<T, T> result_type;
 

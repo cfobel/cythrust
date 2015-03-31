@@ -83,6 +83,12 @@ cdef extern from "src/functional.hpp" namespace "cythrust" nogil:
     cdef cppclass minmax_tuple[T]:
         pass
 
+    cdef cppclass min2_tuple[T]:
+        pass
+
+    cdef cppclass max2_tuple[T]:
+        pass
+
     cdef cppclass minmax[T]:
         pass
 
