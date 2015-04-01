@@ -89,6 +89,9 @@ cdef extern from "src/functional.hpp" namespace "cythrust" nogil:
     cdef cppclass max2_tuple[T]:
         pass
 
+    cdef cppclass min2max2_tuple[T]:
+        pass
+
     cdef cppclass minmax[T]:
         pass
 
@@ -117,6 +120,12 @@ cdef extern from "src/functional.hpp" namespace "cythrust" nogil:
         T operator()[T1](T1 a)
 
     cdef cppclass second[T]:
+        T operator()[T1](T1 a)
+
+    cdef cppclass third[T]:
+        T operator()[T1](T1 a)
+
+    cdef cppclass fourth[T]:
         T operator()[T1](T1 a)
 
 

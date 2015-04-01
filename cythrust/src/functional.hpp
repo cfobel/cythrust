@@ -32,6 +32,30 @@ namespace cythrust {
 
 
   template <typename T>
+  struct third {
+    typedef T result_type;
+
+    template <typename T1>
+    __host__ __device__
+    result_type operator() (T1 a) {
+      return thrust::get<2>(a);
+    }
+  };
+
+
+  template <typename T>
+  struct fourth {
+    typedef T result_type;
+
+    template <typename T1>
+    __host__ __device__
+    result_type operator() (T1 a) {
+      return thrust::get<3>(a);
+    }
+  };
+
+
+  template <typename T>
   struct power {
     typedef T result_type;
 
@@ -86,21 +110,24 @@ namespace cythrust {
     template <typename T1, typename T2>
     __host__ __device__
     result_type operator() (T1 const &a, T2 const &b) {
+      result_type result;
+
       //     [     a0         a1           b0                  b1       ]
       if (thrust::get<1>(a) < thrust::get<0>(b)) {
-        return a;
+        result = a;
       //     [     b0         b1           a0                  a1       ]
       } else if (thrust::get<1>(b) < thrust::get<0>(a)) {
-        return b;
+        result = b;
       //     [     a0         b0           a1                  b1       ]
       //     [     a0         b0           b1                  a1       ]
       } else if (thrust::get<0>(a) < thrust::get<0>(b)) {
-        return thrust::make_tuple(thrust::get<0>(a), thrust::get<0>(b));
+        result = thrust::make_tuple(thrust::get<0>(a), thrust::get<0>(b));
       //     [     b0         a0           a1                  b1       ]
       //     [     b0         a0           b1                  a1       ]
       } else {
-        return thrust::make_tuple(thrust::get<0>(b), thrust::get<0>(a));
+        result = thrust::make_tuple(thrust::get<0>(b), thrust::get<0>(a));
       }
+      return result;
     }
   };
 
@@ -127,6 +154,77 @@ namespace cythrust {
       } else {
         return thrust::make_tuple(thrust::get<1>(b), thrust::get<1>(a));
       }
+    }
+  };
+
+
+  template <typename T>
+  struct min2max2_tuple {
+    typedef thrust::tuple<T, T, T, T> result_type;
+
+    template <typename T1, typename T2>
+    __host__ __device__
+    result_type operator() (T1 const &a, T2 const &b) {
+      /* # `minmax_tuple` #
+       *
+       * ## Arguments ##
+       *
+       *  - `a`: 4-tuple.
+       *  - `b`: 4-tuple.
+       *
+       * ## Return ##
+       *
+       *  - 4-tuple containing:
+       *   * Lowest value (minimum)
+       *   * Second lowest value
+       *   * Second highest value
+       *   * Highest value (maximum)
+       */
+      T min0;
+      T min1;
+      T max0;
+      T max1;
+
+      //     [     a0         a1           b0                  b1       ]
+      if (thrust::get<1>(a) < thrust::get<0>(b)) {
+        min0 = thrust::get<0>(a);
+        min1 = thrust::get<1>(a);
+      //     [     b0         b1           a0                  a1       ]
+      } else if (thrust::get<1>(b) < thrust::get<0>(a)) {
+        min0 = thrust::get<0>(b);
+        min1 = thrust::get<1>(b);
+      //     [     a0         b0           a1                  b1       ]
+      //     [     a0         b0           b1                  a1       ]
+      } else if (thrust::get<0>(a) < thrust::get<0>(b)) {
+        min0 = thrust::get<0>(a);
+        min1 = thrust::get<0>(b);
+      //     [     b0         a0           a1                  b1       ]
+      //     [     b0         a0           b1                  a1       ]
+      } else {
+        min0 = thrust::get<0>(b);
+        min1 = thrust::get<0>(a);
+      }
+
+      //     [     a0         a1           b0                  b1       ]
+      if (thrust::get<3>(a) < thrust::get<2>(b)) {
+        max0 = thrust::get<2>(b);
+        max1 = thrust::get<3>(b);
+      //     [     b0         b1           a0                  a1       ]
+      } else if (thrust::get<3>(b) < thrust::get<2>(a)) {
+        max0 = thrust::get<2>(a);
+        max1 = thrust::get<3>(a);
+      //     [     a0         b0           a1                  b1       ]
+      //     [     b0         a0           a1                  b1       ]
+      } else if (thrust::get<3>(a) < thrust::get<3>(b)) {
+        max0 = thrust::get<3>(a);
+        max1 = thrust::get<3>(b);
+      //     [     a0         b0           b1                  a1       ]
+      //     [     b0         a0           b1                  a1       ]
+      } else {
+        max0 = thrust::get<3>(b);
+        max1 = thrust::get<3>(a);
+      }
+      return thrust::make_tuple(min0, min1, max0, max1);
     }
   };
 
