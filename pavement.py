@@ -72,8 +72,6 @@ setup(name='cythrust',
       url='https://github.com/cfobel/cythrust',
       license='GPL',
       packages=['cythrust'],
-      package_data=find_package_data('cythrust', package='cythrust',
-                                     only_in_packages=False),
       install_requires=['numpy>=1.9.0', 'jinja2>=2.7.3', 'Cython>=0.21',
                         'pandas>=0.14.1'],
       ext_modules=ext_modules)
