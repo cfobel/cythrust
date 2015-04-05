@@ -4,4 +4,4 @@ include version.py
 include setup.py
 include paver-minilib.zip
 recursive-include cythrust *
-recursive-exclude cythrust *.pyc
+recursive-exclude cythrust *.pyc *.so

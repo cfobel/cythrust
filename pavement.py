@@ -74,6 +74,7 @@ setup(name='cythrust',
       packages=['cythrust'],
       install_requires=['numpy>=1.9.0', 'jinja2>=2.7.3', 'Cython>=0.21',
                         'pandas>=0.14.1'],
+      include_package_data=True,
       ext_modules=ext_modules)
 
 
