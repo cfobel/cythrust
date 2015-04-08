@@ -309,7 +309,218 @@ class Context(_Context):
         return full_module_name
 
 
-class DeviceVectorCollection(object):
+class DeviceViewGroup(object):
+    '''
+    Base class to group together references to device vector views that belong
+    to a common `Context`.  This is useful, for example, to create `Transform`
+    instances using views from different columns of `DeviceDataFrame` and
+    `DeviceVectorCollection` instances.
+
+    This class also acts as a mixin for the `DeviceDataFrame` and
+    `DeviceVectorCollection` classes, to provide shared functionality.
+
+    Note that a `DeviceViewGroup` does *not necessarily* own the underlying
+    device vectors.
+    '''
+
+    @classmethod
+    def from_device_vectors(self, device_vectors):
+        group = DeviceViewGroup()
+        group._context = device_vectors._context
+        group._view_dict = device_vectors.v.copy()
+        if len(set([v.size for v in group._view_dict.itervalues()])) > 1:
+            # Device vector views are of different sizes.
+            group._jagged = True
+        else:
+            # All vector views are of the same length.
+            group._jagged = True
+        return group
+
+    @property
+    def jagged(self):
+        return self._jagged
+
+    def inline_func(self, columns, code='', setup='', context=None,
+                    verbose=False, include_dirs=None, **kwargs):
+        '''
+        Return a dynamically compiled Cython function, based on the
+        `BASE_TEMPLATE` template.
+
+        Argument types are implied by the data-type of each column, where each
+        column is represented by the corresponding `DeviceVectorView` type.
+
+        Arguments
+        ---------
+
+         - `columns` : `list`-like
+          * Column names to pass as arguments to generated function.
+         - `code` : `str` *(optional)*
+          * Code to insert in function body.  May contain Jinja
+            template language.
+         - `setup` : `str` *(optional)*
+          * Set-up code to insert at start of template.  May contain Jinja
+            template language.
+         - `context` : `dict` *(optional)*
+          * Context to add to Jinja template context.
+         - `verbose` : `bool` *(optional)*
+          * If `True`, generated code will be printed.
+         - `kwargs` : `dict` *(optional)*
+          * Additional keyword arguments to pass along to `inline_pyx_module`.
+        '''
+        template = jinja2.Template('\n'.join([setup, BASE_TEMPLATE, code]))
+
+        if context is None:
+            context = {}
+        all_code = template.render(
+            df=self, module_names=self.get_vector_module(columns),
+            dtypes=self.get_dtype(columns), view_names=columns,
+            **context)
+        if include_dirs is None:
+            include_dirs = self._context.kwargs['include_dirs']
+        else:
+            include_dirs += self._context.kwargs['include_dirs']
+        module_path, module_name = self._context.inline_pyx_module(
+            all_code, include_dirs=include_dirs, **kwargs)
+        if verbose:
+            print all_code
+        exec('import %s' % module_name)
+        return Functor(all_code, eval('%s.__foo__' % module_name))
+
+    def __getitem__(self, key):
+        '''
+        Return the columns corresponding to the provided key(s) as a
+        `DeviceViewGroup`.
+        '''
+        group = DeviceViewGroup()
+        group._context = self._context
+        views = self._get_scalar_or_list(key, lambda name, column: (name,
+                                                                    column),
+                                         include_name=True)
+        if isinstance(views, tuple):
+            views = [views]
+        group._view_dict = OrderedDict(views)
+        return group
+
+    @property
+    def columns(self):
+        return self._view_dict.keys()
+
+    @property
+    def v(self):
+        return self._view_dict
+
+    def _get_scalar_or_list(self, column, func, include_name=False):
+        if not isinstance(column, str) and isinstance(column, Container):
+            if include_name:
+                return [func(c, self.v[c]) for c in column]
+            else:
+                return [func(self.v[c]) for c in column]
+        else:
+            if include_name:
+                return func(column, self.v[column])
+            else:
+                return func(self.v[column])
+
+    def get_vector_class(self, column):
+        return self._get_scalar_or_list(column,
+                                        lambda x:
+                                        self._context
+                                        .get_device_vector_class(x.dtype))
+
+    def get_vector_view_class(self, column):
+        return self._get_scalar_or_list(column,
+                                        lambda x:
+                                        self._context
+                                        .get_device_vector_view_class(x.dtype))
+
+    def get_vector_module(self, column):
+        return self._get_scalar_or_list(column,
+                                        lambda x:
+                                        self._context
+                                        .get_device_vector_module(x.dtype))
+
+    def tensor(self, column):
+        import theano.tensor as T
+
+        return self._get_scalar_or_list(column, lambda column, view:
+                                        T.vector(column,
+                                                 dtype=view.dtype.__name__),
+                                        include_name=True)
+
+    def get_dtype(self, column):
+        return self._get_scalar_or_list(column, lambda x: x.dtype)
+
+    def get_ctype(self, column):
+        return self._get_scalar_or_list(column, lambda x: x.ctype)
+
+    @functools32.lru_cache()
+    def get_sort_func(self, key_columns, value_columns=None, stable=False):
+        '''
+        Dynamically compile a Thrust Cython sort function based on the types of
+        the specified key and value columns for sorting.
+
+        __NB,__ Results of this function are cached to improve runtime
+        performance of repeated calls for the same columns/column types.
+        '''
+        if value_columns is None:
+            value_columns = []
+        key_modules = tuple(self.get_vector_module(key_columns))
+        value_modules = tuple(self.get_vector_module(value_columns))
+        key_dtypes = tuple(self.get_dtype(key_columns))
+        value_dtypes = tuple(self.get_dtype(value_columns))
+
+        return get_sort_func(self._context, key_modules, key_dtypes,
+                             value_modules, value_dtypes, stable=stable)
+
+    def sort(self, column=None, key=None, stable=False):
+        '''
+        Sort values in specified column(s) by the values specified key
+        column(s).
+
+        If no column or key is specified, the rows across all columns will be
+        sorted, based on the order of the columns as they appear in the
+        `columns` attribute.
+
+        If no `key` columns are specified, the values in the `column` column(s)
+        are sorted while leaving all other columns *untouched*.
+        '''
+        if column is None:
+            if key is not None:
+                raise ValueError('If column is not specified, `key` must not '
+                                 'be specified, either.')
+            columns = tuple(self.columns)
+        elif isinstance(column, str):
+            columns = (column, )
+        else:
+            columns = tuple(column)
+
+        if key is None:
+            # If no columns were specified to sort by, interpret `column` as
+            # key columns to sort by.
+            key = columns
+            columns = tuple()
+        elif isinstance(key, str):
+            key = (key, )
+        else:
+            key = tuple(key)
+
+        sort_func = self.get_sort_func(key_columns=key, value_columns=columns,
+                                       stable=stable)
+        sort_func(*self[key + columns])
+
+    def as_arrays(self):
+        return OrderedDict([(k, v[:]) for k, v in self._view_dict.iteritems()])
+
+    def views(self):
+        return self._view_dict.values()
+
+    @property
+    def size(self):
+        return OrderedDict([(k, v.size)
+                            for k, v in self._view_dict.iteritems()])
+
+
+class DeviceVectorCollection(DeviceViewGroup):
     '''
     A container of `cythrust.device_vector.DeviceVector` instances.
     Can be initialized by:
@@ -375,64 +586,9 @@ class DeviceVectorCollection(object):
                                          .iteritems()])
         return result
 
-    def as_arrays(self):
-        return OrderedDict([(k, v[:]) for k, v in self._view_dict.iteritems()])
-
-    def get_vector_class(self, column):
-        return self._get_scalar_or_list(column,
-                                        lambda x:
-                                        self._context
-                                        .get_device_vector_class(x.dtype))
-
-    def get_vector_view_class(self, column):
-        return self._get_scalar_or_list(column,
-                                        lambda x:
-                                        self._context
-                                        .get_device_vector_view_class(x.dtype))
-
-    def get_vector_module(self, column):
-        return self._get_scalar_or_list(column,
-                                        lambda x:
-                                        self._context
-                                        .get_device_vector_module(x.dtype))
-
-    def get_dtype(self, column):
-        return self._get_scalar_or_list(column, lambda x: x.dtype)
-
-    def get_ctype(self, column):
-        return self._get_scalar_or_list(column, lambda x: x.ctype)
-
-    def _get_scalar_or_list(self, column, func, include_name=False):
-        if not isinstance(column, str) and isinstance(column, Container):
-            if include_name:
-                return [func(c, self.v[c]) for c in column]
-            else:
-                return [func(self.v[c]) for c in column]
-        else:
-            if include_name:
-                return func(column, self.v[column])
-            else:
-                return func(self.v[column])
-
     @property
     def d(self):
         return self._data_dict
-
-    @property
-    def v(self):
-        return self._view_dict
-
-    def __getitem__(self, key):
-        return self._get_scalar_or_list(key, lambda c: c)
-
-    @property
-    def columns(self):
-        return self._view_dict.keys()
-
-    @property
-    def size(self):
-        return OrderedDict([(k, v.size)
-                            for k, v in self._view_dict.iteritems()])
 
 
 class DeviceDataFrame(DeviceVectorCollection):
@@ -518,14 +674,6 @@ class DeviceDataFrame(DeviceVectorCollection):
         lbound, ubound = self.index_bounds()
         return (i >= lbound and i < ubound and lbound < ubound)
 
-    def tensor(self, column):
-        import theano.tensor as T
-
-        return self._get_scalar_or_list(column, lambda column, view:
-                                        T.vector(column,
-                                                 dtype=view.dtype.__name__),
-                                        include_name=True)
-
     @property
     def df(self):
         return self.as_dataframe()
@@ -562,9 +710,6 @@ class DeviceDataFrame(DeviceVectorCollection):
                                         self._data_dict.iteritems()])
         return view
 
-    def views(self):
-        return self._view_dict.values()
-
     def base(self):
         result = DeviceDataFrame()
         result._data_dict = self._data_dict
@@ -572,107 +717,6 @@ class DeviceDataFrame(DeviceVectorCollection):
                                          for k, v in result._data_dict
                                          .iteritems()])
         return result
-
-    def sort(self, column=None, key=None, stable=False):
-        '''
-        Sort values in specified column(s) by the values specified key
-        column(s).
-
-        If no column or key is specified, the rows across all columns will be
-        sorted, based on the order of the columns as they appear in the
-        `columns` attribute.
-
-        If no `key` columns are specified, the values in the `column` column(s)
-        are sorted while leaving all other columns *untouched*.
-        '''
-        if column is None:
-            if key is not None:
-                raise ValueError('If column is not specified, `key` must not '
-                                 'be specified, either.')
-            columns = tuple(self.columns)
-        elif isinstance(column, str):
-            columns = (column, )
-        else:
-            columns = tuple(column)
-
-        if key is None:
-            # If no columns were specified to sort by, interpret `column` as
-            # key columns to sort by.
-            key = columns
-            columns = tuple()
-        elif isinstance(key, str):
-            key = (key, )
-        else:
-            key = tuple(key)
-
-        sort_func = self.get_sort_func(key_columns=key, value_columns=columns,
-                                       stable=stable)
-        sort_func(*self[key + columns])
-
-    @functools32.lru_cache()
-    def get_sort_func(self, key_columns, value_columns=None, stable=False):
-        '''
-        Dynamically compile a Thrust Cython sort function based on the types of
-        the specified key and value columns for sorting.
-
-        __NB,__ Results of this function are cached to improve runtime
-        performance of repeated calls for the same columns/column types.
-        '''
-        if value_columns is None:
-            value_columns = []
-        key_modules = tuple(self.get_vector_module(key_columns))
-        value_modules = tuple(self.get_vector_module(value_columns))
-        key_dtypes = tuple(self.get_dtype(key_columns))
-        value_dtypes = tuple(self.get_dtype(value_columns))
-
-        return get_sort_func(self._context, key_modules, key_dtypes,
-                             value_modules, value_dtypes, stable=stable)
-
-    def inline_func(self, columns, code='', setup='', context=None,
-                    verbose=False, include_dirs=None, **kwargs):
-        '''
-        Return a dynamically compiled Cython function, based on the
-        `BASE_TEMPLATE` template.
-
-        Argument types are implied by the data-type of each column, where each
-        column is represented by the corresponding `DeviceVectorView` type.
-
-        Arguments
-        ---------
-
-         - `columns` : `list`-like
-          * Column names to pass as arguments to generated function.
-         - `code` : `str` *(optional)*
-          * Code to insert in function body.  May contain Jinja
-            template language.
-         - `setup` : `str` *(optional)*
-          * Set-up code to insert at start of template.  May contain Jinja
-            template language.
-         - `context` : `dict` *(optional)*
-          * Context to add to Jinja template context.
-         - `verbose` : `bool` *(optional)*
-          * If `True`, generated code will be printed.
-         - `kwargs` : `dict` *(optional)*
-          * Additional keyword arguments to pass along to `inline_pyx_module`.
-        '''
-        template = jinja2.Template('\n'.join([setup, BASE_TEMPLATE, code]))
-
-        if context is None:
-            context = {}
-        all_code = template.render(
-            df=self, module_names=self.get_vector_module(columns),
-            dtypes=self.get_dtype(columns), view_names=columns,
-            **context)
-        if include_dirs is None:
-            include_dirs = self._context.kwargs['include_dirs']
-        else:
-            include_dirs += self._context.kwargs['include_dirs']
-        module_path, module_name = self._context.inline_pyx_module(
-            all_code, include_dirs=include_dirs, **kwargs)
-        if verbose:
-            print all_code
-        exec('import %s' % module_name)
-        return Functor(all_code, eval('%s.__foo__' % module_name))
 
 
 @functools32.lru_cache()
