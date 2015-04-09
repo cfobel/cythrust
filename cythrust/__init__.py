@@ -340,6 +340,22 @@ class DeviceViewGroup(object):
     def jagged(self):
         return self._jagged
 
+    @property
+    def df(self):
+        return self.as_dataframe()
+
+    def as_dataframe(self):
+        return pd.DataFrame(OrderedDict([(k, v[:])
+                                         for k, v in self._view_dict
+                                         .iteritems()]),
+                            index=range(*self.index_bounds()))
+
+    def index_bounds(self):
+        sample_view = self._view_dict.values()[0]
+        first_i = sample_view.first_i
+        last_i = sample_view.last_i
+        return first_i, last_i + 1
+
     def inline_func(self, columns, code='', setup='', context=None,
                     verbose=False, include_dirs=None, **kwargs):
         '''
@@ -638,12 +654,6 @@ class DeviceDataFrame(DeviceVectorCollection):
         self._view_dict[column_name] = self._data_dict[column_name].view(
             first_i=start, last_i=end)
 
-    def as_dataframe(self):
-        return pd.DataFrame(OrderedDict([(k, v[:])
-                                         for k, v in self._view_dict
-                                         .iteritems()]),
-                            index=range(*self.index_bounds()))
-
     def __setitem__(self, key_or_slice, value):
         if isinstance(value, pd.DataFrame):
             missing_columns = (set(value.columns)
@@ -664,19 +674,9 @@ class DeviceDataFrame(DeviceVectorCollection):
             for v in self._view_dict.itervalues():
                 v[key_or_slice] = value
 
-    def index_bounds(self):
-        sample_view = self._view_dict.values()[0]
-        first_i = sample_view.first_i
-        last_i = sample_view.last_i
-        return first_i, last_i + 1
-
     def _in_bounds(self, i):
         lbound, ubound = self.index_bounds()
         return (i >= lbound and i < ubound and lbound < ubound)
-
-    @property
-    def df(self):
-        return self.as_dataframe()
 
     @property
     def size(self):
