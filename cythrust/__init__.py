@@ -14,7 +14,7 @@ try:
     import pandas as pd
 except:
     pass
-from .template import SORT_TEMPLATE, BASE_TEMPLATE
+from .template import SORT_TEMPLATE, BASE_TEMPLATE, REDUCE_TEMPLATE
 
 
 NP_TYPE_TO_CTYPE = OrderedDict([('int8', 'int8_t'),
@@ -737,3 +737,38 @@ def get_sort_func(context, key_modules, key_dtypes, value_modules=None,
         raise
     exec('from %s import sort_func as __sort_func__' % module_name)
     return __sort_func__
+
+
+@functools32.lru_cache()
+def get_reduce_func(context, key_modules, key_dtypes, value_modules,
+                    value_dtypes, key_ctypes, value_ctypes,
+                    key_out_modules=None, key_out_dtypes=None,
+                    value_out_modules=None, value_out_dtypes=None):
+    # By default, use input key/value types for output keys/values.
+    if key_out_modules is None:
+        key_out_modules = key_modules
+    if key_out_dtypes is None:
+        key_out_dtypes = key_dtypes
+    if value_out_modules is None:
+        value_out_modules = value_modules
+    if value_out_dtypes is None:
+        value_out_dtypes = value_dtypes
+
+    template = jinja2.Template(REDUCE_TEMPLATE)
+    code = template.render(key_modules=key_modules,
+                           key_dtypes=key_dtypes,
+                           value_modules=value_modules,
+                           value_dtypes=value_dtypes,
+                           key_out_modules=key_out_modules,
+                           key_out_dtypes=key_out_dtypes,
+                           key_ctypes=key_ctypes,
+                           value_out_modules=value_out_modules,
+                           value_out_dtypes=value_out_dtypes,
+                           value_ctypes=value_ctypes)
+    try:
+        module_path, module_name = context.inline_pyx_module(code)
+    except:
+        print code
+        raise
+    exec('from %s import reduce_by_key_func as __reduce_func__' % module_name)
+    return __reduce_func__
