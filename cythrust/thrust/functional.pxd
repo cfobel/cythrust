@@ -144,3 +144,20 @@ cdef extern from "src/unpack_args.hpp":
 
     cdef cppclass reverse_divides[T]:
         pass
+
+
+cdef extern from "src/functional_tuples.hpp" namespace "cythrust" nogil:
+    cdef cppclass reduce2[F1, F2]:
+        pass
+
+    cdef cppclass reduce3[F1, F2, F3]:
+        pass
+
+    cdef cppclass reduce4[F1, F2, F3, F4]:
+        pass
+
+    cdef cppclass reduce5[F1, F2, F3, F4, F5]:
+        pass
+
+    cdef cppclass reduce6[F1, F2, F3, F4, F5, F6]:
+        pass

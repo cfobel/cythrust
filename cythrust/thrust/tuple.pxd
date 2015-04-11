@@ -1,21 +1,27 @@
 cdef extern from "<thrust/tuple.h>" namespace "thrust" nogil:
     cdef cppclass tuple2 "thrust::tuple" [T0, T1]:
-        pass
+        tuple2()
+        tuple2(T0 a, T1 b)
 
     cdef cppclass tuple3 "thrust::tuple" [T0, T1, T2]:
-        pass
+        tuple3()
+        tuple3(T0 a, T1 b, T2 c)
 
     cdef cppclass tuple4 "thrust::tuple" [T0, T1, T2, T3]:
-        pass
+        tuple4()
+        tuple4(T0 a, T1 b, T2 c, T3 d)
 
     cdef cppclass tuple5 "thrust::tuple" [T0, T1, T2, T3, T4]:
-        pass
+        tuple5()
+        tuple5(T0 a, T1 b, T2 c, T3 d, T4 e)
 
     cdef cppclass tuple6 "thrust::tuple" [T0, T1, T2, T3, T4, T5]:
-        pass
+        tuple6()
+        tuple6(T0 a, T1 b, T2 c, T3 d, T4 e, T5 f)
 
     cdef cppclass tuple7 "thrust::tuple" [T0, T1, T2, T3, T4, T5, T6]:
-        pass
+        tuple7()
+        tuple7(T0 a, T1 b, T2 c, T3 d, T4 e, T5 f, T6 g)
 
     tuple2[T0, T1] make_tuple2 "thrust::make_tuple" [T0, T1](T0 a, T1 b)
     tuple3[T0, T1, T2] make_tuple3 "thrust::make_tuple" [T0, T1, T2](T0 a, T1 b, T2 c)
