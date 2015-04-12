@@ -14,7 +14,8 @@ try:
     import pandas as pd
 except:
     pass
-from .template import SORT_TEMPLATE, BASE_TEMPLATE, REDUCE_TEMPLATE
+from .template import (SORT_TEMPLATE, BASE_TEMPLATE, REDUCE_TEMPLATE,
+                       COUNT_TEMPLATE)
 
 
 NP_TYPE_TO_CTYPE = OrderedDict([('int8', 'int8_t'),
@@ -769,7 +770,22 @@ class GroupBy(object):
     def sort(self):
         self.sort_func(*(self.key_views.v.values() + self.value_views.v.values()))
 
+    def get_count_func(self, out):
+        key_columns = self.key_views.columns
+        key_modules = tuple(self.key_views.get_vector_module(key_columns))
+        key_dtypes = tuple(self.key_views.get_dtype(key_columns))
+        key_ctypes = tuple(self.key_views.get_ctype(key_columns))
+        count_modules = (out.get_vector_module('count'), )
+        count_dtypes = (out.get_dtype('count'), )
+        count_ctypes = (out.get_ctype('count'), )
+
+        return get_count_func(self.views._context, key_modules, key_dtypes,
+                              count_modules, count_dtypes, key_ctypes,
+                              count_ctypes)
+
     def get_reduce_func(self, reduce_ops, value_columns=None):
+        # TODO: Optionally accept `out` kwarg to infer iterator and module
+        # types from output device data frame.
         key_columns = self.key_views.columns
         if value_columns is None:
             value_columns = self.value_views.columns
@@ -852,6 +868,44 @@ class GroupBy(object):
             view.last_i = reduced_key_count - 1
         return out
 
+    def ref_count(self):
+        '''
+        Perform count using `pandas.DataFrame.agg`.
+        '''
+        first_col = self.value_views.columns[0]
+        ref_out = (self.views.df.groupby(self.key_views.columns)
+                   .agg({first_col: 'count'})
+                   .rename(columns={first_col: 'count'}))
+        return ref_out.reset_index()
+
+    def count(self, out=None, bounds_check=True):
+        '''
+        Perform count by key using `cythrust.thrust.reduce_by_key`.
+        '''
+        if out is None:
+            out_vectors = OrderedDict(
+                [(column, np.zeros(view.size, dtype=view.dtype))
+                 for column, view in self.key_views.v.iteritems()] +
+                [('count', np.zeros(self.views.size, dtype='uint32'))])
+            out = DeviceDataFrame(out_vectors)
+        elif bounds_check:
+            # Check to make sure that the views are large enough.
+            if hasattr(out, 'vector_size'):
+                assert(out.vector_size >= self.views.size)
+            else:
+                for view in out.v.itervalues():
+                    assert(view.size >= self.views.size)
+
+        func = self.get_count_func(out)
+        in_views = self.key_views.v.values()
+        out_views = out.v.values()
+
+        reduced_key_count = func(*(in_views + out_views))
+
+        for view in out.v.itervalues():
+            view.last_i = reduced_key_count - 1
+        return out
+
 
 @functools32.lru_cache()
 def get_sort_func(context, key_modules, key_dtypes, value_modules=None,
@@ -907,3 +961,31 @@ def get_reduce_func(context, key_modules, key_dtypes, value_modules,
         raise
     exec('from %s import reduce_by_key_func as __reduce_func__' % module_name)
     return __reduce_func__
+
+
+@functools32.lru_cache()
+def get_count_func(context, key_modules, key_dtypes, value_out_modules,
+                   value_out_dtypes, key_ctypes, value_out_ctypes,
+                   key_out_modules=None, key_out_dtypes=None):
+    # By default, use input key/value types for output keys/values.
+    if key_out_modules is None:
+        key_out_modules = key_modules
+    if key_out_dtypes is None:
+        key_out_dtypes = key_dtypes
+
+    template = jinja2.Template(COUNT_TEMPLATE)
+    code = template.render(key_modules=key_modules,
+                           key_dtypes=key_dtypes,
+                           key_ctypes=key_ctypes,
+                           value_out_modules=value_out_modules,
+                           value_out_dtypes=value_out_dtypes,
+                           value_out_ctypes=value_out_ctypes,
+                           key_out_modules=key_out_modules,
+                           key_out_dtypes=key_out_dtypes)
+    try:
+        module_path, module_name = context.inline_pyx_module(code)
+    except:
+        print code
+        raise
+    exec('from %s import count_by_key_func as __count_func__' % module_name)
+    return __count_func__
