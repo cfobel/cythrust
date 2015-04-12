@@ -209,7 +209,11 @@ ctypedef {{ value_out_dtypes[0].__name__.title() }}Iterator values_out_iterator
 
 
 # Functors
-from cythrust.thrust.functional cimport plus, equal_to
+from cythrust.thrust.functional cimport equal_to,
+{%- for op in reduce_ops -%}
+{{ reduce_ops[loop.index0] }}
+{%- if not loop.last %}, {% endif -%}
+{% endfor -%}
 {%- if value_modules|length > 1 %}, reduce{{ value_modules|length }}{% endif %}
 
 
@@ -230,15 +234,15 @@ def reduce_by_key_func(
     {% if value_out_modules|length > 1 %}
     cdef reduce{{ value_out_modules|length }}[
 {%- for c_type in value_ctypes -%}
-plus[{{ c_type }}]
+{{ reduce_ops[loop.index0] }}[{{ c_type }}]
 {%- if not loop.last %}, {% endif -%}
 {% endfor -%}] *op = new reduce{{ value_out_modules|length }}[
 {%- for c_type in value_ctypes -%}
-plus[{{ c_type }}]
+{{ reduce_ops[loop.index0] }}[{{ c_type }}]
 {%- if not loop.last %}, {% endif -%}
 {% endfor -%}]()
     {% else %}
-    cdef plus[{{ value_ctypes[0] }}] *op = new plus[{{ value_ctypes[0] }}]()
+    cdef {{ reduce_ops[0] }}[{{ value_ctypes[0] }}] *op = new {{ reduce_ops[0] }}[{{ value_ctypes[0] }}]()
     {% endif %}
 
     {% if key_out_modules|length > 1 %}

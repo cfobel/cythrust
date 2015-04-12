@@ -29,6 +29,9 @@ NP_TYPE_TO_CTYPE = OrderedDict([('int8', 'int8_t'),
                                 ('float', 'double'),
                                 ('float64', 'double')])
 
+PANDAS_TO_THRUST = {'sum': 'plus', 'product': 'multiplies',
+                    'min': 'minimum', 'max': 'maximum'}
+
 
 class Functor(object):
     def __init__(self, code, func):
@@ -766,26 +769,48 @@ class GroupBy(object):
     def sort(self):
         self.sort_func(*(self.key_views.v.values() + self.value_views.v.values()))
 
-    def get_reduce_func(self):
+    def get_reduce_func(self, reduce_ops, value_columns=None):
         key_columns = self.key_views.columns
-        value_columns = self.value_views.columns
+        if value_columns is None:
+            value_columns = self.value_views.columns
         key_modules = tuple(self.key_views.get_vector_module(key_columns))
         key_dtypes = tuple(self.key_views.get_dtype(key_columns))
         key_ctypes = tuple(self.key_views.get_ctype(key_columns))
         value_modules = tuple(self.value_views.get_vector_module(value_columns))
         value_dtypes = tuple(self.value_views.get_dtype(value_columns))
         value_ctypes = tuple(self.value_views.get_ctype(value_columns))
+        assert(len(reduce_ops) == len(value_columns))
 
         return get_reduce_func(self.views._context, key_modules, key_dtypes,
-                               value_modules, value_dtypes, key_ctypes, value_ctypes)
+                               value_modules, value_dtypes, key_ctypes,
+                               value_ctypes, tuple(reduce_ops))
 
-    def reduce(self, out=None, bounds_check=True):
+    def agg(self, reduce_op, out=None, bounds_check=True):
+        if isinstance(reduce_op, str):
+            value_columns = self.value_views.v.keys()
+            value_out_columns = value_columns
+            reduce_ops = [reduce_op, ] * len(value_columns)
+        else:
+            value_columns = [column
+                             for column in self.value_views.v.keys()
+                             for op in reduce_op]
+            value_out_columns = ['%s_%s' % (column, op)
+                                 for column in self.value_views.v.keys()
+                                 for op in reduce_op]
+            reduce_ops = np.tile(reduce_op, len(self.value_views.v)).tolist()
+
         # __NB__ Key columns and value columns are all unique
         # (i.e., a key column will not have the same name as
         # any value column).
         if out is None:
-            out = DeviceDataFrame(self.key_views.df.join(self.value_views.df) * 0,
-                                  context=self.views._context)
+            out_values = np.array([np.zeros(view.size, dtype=view.dtype)
+                                   for column, view in self.value_views.v
+                                   .iteritems()
+                                   for op in reduce_op]).T
+            out = DeviceDataFrame((self.key_views.df * 0)
+                                  .join(pd.DataFrame(out_values,
+                                                     columns=
+                                                     value_out_columns)))
         elif bounds_check:
             # Check to make sure that the views are large enough.
             if hasattr(out, 'vector_size'):
@@ -794,14 +819,17 @@ class GroupBy(object):
                 for view in out.v.itervalues():
                     assert(view.size >= self.views.size)
 
-        func = self.get_reduce_func()
-        in_views = self.key_views.v.values() + self.value_views.v.values()
+        func = self.get_reduce_func([PANDAS_TO_THRUST[op]
+                                     for op in reduce_ops],
+                                    value_columns=value_columns)
+        in_views = self.key_views.v.values() + [self.value_views.v[c]
+                                                for c in value_columns]
         out_views = out.v.values()
 
-        N = func(*(in_views + out_views))
+        reduced_key_count = func(*(in_views + out_views))
 
         for view in out.v.itervalues():
-            view.last_i = N - 1
+            view.last_i = reduced_key_count - 1
         return out
 
 
@@ -828,7 +856,7 @@ def get_sort_func(context, key_modules, key_dtypes, value_modules=None,
 @functools32.lru_cache()
 def get_reduce_func(context, key_modules, key_dtypes, value_modules,
                     value_dtypes, key_ctypes, value_ctypes,
-                    key_out_modules=None, key_out_dtypes=None,
+                    reduce_ops, key_out_modules=None, key_out_dtypes=None,
                     value_out_modules=None, value_out_dtypes=None):
     # By default, use input key/value types for output keys/values.
     if key_out_modules is None:
@@ -845,12 +873,13 @@ def get_reduce_func(context, key_modules, key_dtypes, value_modules,
                            key_dtypes=key_dtypes,
                            value_modules=value_modules,
                            value_dtypes=value_dtypes,
+                           key_ctypes=key_ctypes,
+                           value_ctypes=value_ctypes,
+                           reduce_ops=reduce_ops,
                            key_out_modules=key_out_modules,
                            key_out_dtypes=key_out_dtypes,
-                           key_ctypes=key_ctypes,
                            value_out_modules=value_out_modules,
-                           value_out_dtypes=value_out_dtypes,
-                           value_ctypes=value_ctypes)
+                           value_out_dtypes=value_out_dtypes)
     try:
         module_path, module_name = context.inline_pyx_module(code)
     except:
