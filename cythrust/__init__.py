@@ -785,18 +785,33 @@ class GroupBy(object):
                                value_modules, value_dtypes, key_ctypes,
                                value_ctypes, tuple(reduce_ops))
 
+    def ref_agg(self, reduce_op):
+        '''
+        Perform reduction using `pandas.DataFrame.agg`.
+        '''
+        ref_result = (self.views.df.groupby(self.key_views.columns)
+                      .agg(reduce_op))
+        # When applying multiple reduce operations, `pandas` creates a
+        # multi-level index for result.  To match output from `GroupBy.agg`,
+        # flatten multi-level index in result by appending the first level as a
+        # prefix in the form `<value column name>_<operation name>`.
+        if not isinstance(reduce_op, str):
+            ref_result.columns = ['_'.join(col).strip()
+                                  for col in ref_result.columns.values]
+        return ref_result.reset_index()
+
     def agg(self, reduce_op, out=None, bounds_check=True):
+        '''
+        Perform reduction using `cythrust.thrust.reduce_by_key`.
+        '''
         if isinstance(reduce_op, str):
             value_columns = self.value_views.v.keys()
-            value_out_columns = value_columns
             reduce_ops = [reduce_op, ] * len(value_columns)
+            reduce_op = (reduce_op, )
         else:
             value_columns = [column
                              for column in self.value_views.v.keys()
                              for op in reduce_op]
-            value_out_columns = ['%s_%s' % (column, op)
-                                 for column in self.value_views.v.keys()
-                                 for op in reduce_op]
             reduce_ops = np.tile(reduce_op, len(self.value_views.v)).tolist()
 
         # __NB__ Key columns and value columns are all unique
@@ -807,10 +822,15 @@ class GroupBy(object):
                                    for column, view in self.value_views.v
                                    .iteritems()
                                    for op in reduce_op]).T
-            out = DeviceDataFrame((self.key_views.df * 0)
-                                  .join(pd.DataFrame(out_values,
-                                                     columns=
-                                                     value_out_columns)))
+
+            out_vectors = OrderedDict(
+                [(column, np.zeros(view.size, dtype=view.dtype))
+                 for column, view in self.key_views.v.iteritems()] +
+                [('%s_%s' % (column, op),
+                  np.zeros(view.size, dtype=view.dtype))
+                 for column, view in self.value_views.v.iteritems()
+                 for op in reduce_op])
+            out = DeviceDataFrame(out_vectors)
         elif bounds_check:
             # Check to make sure that the views are large enough.
             if hasattr(out, 'vector_size'):
