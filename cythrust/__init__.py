@@ -350,6 +350,11 @@ class DeviceViewGroup(object):
                                          .iteritems()]),
                             index=range(*self.index_bounds()))
 
+    def reset_views(self):
+        for column in self.columns:
+            self.v[column].first_i = 0
+            self.v[column].last_i = self.d[column].size - 1
+
     def index_bounds(self):
         sample_view = self._view_dict.values()[0]
         first_i = sample_view.first_i
@@ -531,9 +536,17 @@ class DeviceViewGroup(object):
         return self._view_dict.values()
 
     @property
-    def size(self):
+    def sizes(self):
         return OrderedDict([(k, v.size)
                             for k, v in self._view_dict.iteritems()])
+
+    @property
+    def vector_sizes(self):
+        return OrderedDict([(k, d.size)
+                            for k, d in self._data_dict.iteritems()])
+
+    def groupby(self, key_columns, sort=True):
+        return GroupBy(self, key_columns)
 
 
 class DeviceVectorCollection(DeviceViewGroup):
@@ -680,7 +693,19 @@ class DeviceDataFrame(DeviceVectorCollection):
 
     @property
     def size(self):
-        return self._view_dict.values()[0].size
+        sizes = self.sizes
+        min_size = min(sizes.values())
+        max_size = max(sizes.values())
+        assert(min_size == max_size)
+        return max_size
+
+    @property
+    def vector_size(self):
+        sizes = self.vector_sizes
+        min_size = min(sizes.values())
+        max_size = max(sizes.values())
+        assert(min_size == max_size)
+        return max_size
 
     def view(self, start, end=None):
         '''
@@ -717,6 +742,67 @@ class DeviceDataFrame(DeviceVectorCollection):
                                          for k, v in result._data_dict
                                          .iteritems()])
         return result
+
+
+class GroupBy(object):
+    def __init__(self, views, key_columns, sort=True, stable=False):
+        self.views = views
+        self.key_views = views[key_columns]
+        self.value_views = views[[c for c in self.views.columns
+                                  if c not in key_columns]]
+        key_columns = self.key_views.columns
+        value_columns = self.value_views.columns
+        key_modules = tuple(self.key_views.get_vector_module(key_columns))
+        key_dtypes = tuple(self.key_views.get_dtype(key_columns))
+        value_modules = tuple(self.value_views.get_vector_module(value_columns))
+        value_dtypes = tuple(self.value_views.get_dtype(value_columns))
+
+        self.sort_func = get_sort_func(views._context, key_modules, key_dtypes,
+                                       value_modules, value_dtypes, stable=stable)
+
+        if sort:
+            self.sort()
+
+    def sort(self):
+        self.sort_func(*(self.key_views.v.values() + self.value_views.v.values()))
+
+    def get_reduce_func(self):
+        key_columns = self.key_views.columns
+        value_columns = self.value_views.columns
+        key_modules = tuple(self.key_views.get_vector_module(key_columns))
+        key_dtypes = tuple(self.key_views.get_dtype(key_columns))
+        key_ctypes = tuple(self.key_views.get_ctype(key_columns))
+        value_modules = tuple(self.value_views.get_vector_module(value_columns))
+        value_dtypes = tuple(self.value_views.get_dtype(value_columns))
+        value_ctypes = tuple(self.value_views.get_ctype(value_columns))
+
+        return get_reduce_func(self.views._context, key_modules, key_dtypes,
+                               value_modules, value_dtypes, key_ctypes, value_ctypes)
+
+    def reduce(self, out=None, bounds_check=True):
+        # __NB__ Key columns and value columns are all unique
+        # (i.e., a key column will not have the same name as
+        # any value column).
+        if out is None:
+            out = DeviceDataFrame(self.key_views.df.join(self.value_views.df) * 0,
+                                  context=self.views._context)
+        elif bounds_check:
+            # Check to make sure that the views are large enough.
+            if hasattr(out, 'vector_size'):
+                assert(out.vector_size >= self.views.size)
+            else:
+                for view in out.v.itervalues():
+                    assert(view.size >= self.views.size)
+
+        func = self.get_reduce_func()
+        in_views = self.key_views.v.values() + self.value_views.v.values()
+        out_views = out.v.values()
+
+        N = func(*(in_views + out_views))
+
+        for view in out.v.itervalues():
+            view.last_i = N - 1
+        return out
 
 
 @functools32.lru_cache()
