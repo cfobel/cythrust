@@ -594,8 +594,9 @@ class DeviceViewGroup(object):
             setup = (jinja2.Template(TRANSFORM_SETUP_TEMPLATE)
                     .render(transforms=transforms.values(),
                             out_views=transforms.keys()))
-            code = jinja2.Template(TRANSFORM_TEMPLATE).render(transforms=transforms.values(),
-                                                            out_views=transforms.keys())
+            code = (jinja2.Template(TRANSFORM_TEMPLATE)
+                    .render(transforms=transforms.values(),
+                            out_views=transforms.keys()))
 
             try:
                 foo = group.inline_func(group._view_dict.keys(),
