@@ -707,6 +707,9 @@ class DeviceDataFrame(DeviceVectorCollection):
             assert(len(set([v.size for v in data.itervalues()])) == 1)
         super(DeviceDataFrame, self).__init__(data, context)
 
+    def copy(self):
+        return DeviceDataFrame(self.as_arrays(), context=self._context)
+
     def add(self, column_name, column_data=None, dtype=None):
         if dtype is None and column_data is None:
             raise ValueError('At least one of `column_data` or `dtype` must '
