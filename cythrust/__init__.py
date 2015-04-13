@@ -900,7 +900,7 @@ class GroupBy(object):
                   np.zeros(view.size, dtype=view.dtype))
                  for column, view in self.value_views.v.iteritems()
                  for op in reduce_op])
-            out = DeviceDataFrame(out_vectors)
+            out = DeviceDataFrame(out_vectors, context=self.views._context)
         elif bounds_check:
             # Check to make sure that the views are large enough.
             if hasattr(out, 'vector_size'):
@@ -940,8 +940,8 @@ class GroupBy(object):
             out_vectors = OrderedDict(
                 [(column, np.zeros(view.size, dtype=view.dtype))
                  for column, view in self.key_views.v.iteritems()] +
-                [('count', np.zeros(self.views.size, dtype='uint32'))])
-            out = DeviceDataFrame(out_vectors)
+                [('count', np.zeros(self.key_views.size, dtype='uint32'))])
+            out = DeviceDataFrame(out_vectors, context=self.views._context)
         elif bounds_check:
             # Check to make sure that the views are large enough.
             if hasattr(out, 'vector_size'):
