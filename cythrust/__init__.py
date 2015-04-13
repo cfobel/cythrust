@@ -597,12 +597,20 @@ class DeviceViewGroup(object):
             code = jinja2.Template(TRANSFORM_TEMPLATE).render(transforms=transforms.values(),
                                                             out_views=transforms.keys())
 
-            foo = group.inline_func(group._view_dict.keys(),
-                setup=setup,
-                include_dirs=
-                np.concatenate([t.get_includes()
-                                for t in transforms.values()]).tolist(),
-                code=code)
+            try:
+                foo = group.inline_func(group._view_dict.keys(),
+                    setup=setup,
+                    include_dirs=
+                    np.concatenate([t.get_includes()
+                                    for t in transforms.values()]).tolist(),
+                    code=code)
+            except:
+                print 50 * '='
+                print setup
+                print 50 * '-'
+                print code
+                print 50 * '='
+                raise
             self.TRANSFORM_CACHE[transform_tuple] = foo
         return out, group, foo
 
