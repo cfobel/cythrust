@@ -547,6 +547,12 @@ class DeviceViewGroup(object):
                             for k, v in self._view_dict.iteritems()])
 
     @property
+    def size(self):
+        sizes = self.sizes.values()
+        assert(min(sizes) == max(sizes))
+        return sizes
+
+    @property
     def vector_sizes(self):
         return OrderedDict([(k, d.size)
                             for k, d in self._data_dict.iteritems()])
