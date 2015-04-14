@@ -16,7 +16,8 @@ except:
     pass
 from .template import (SORT_TEMPLATE, BASE_TEMPLATE, REDUCE_TEMPLATE,
                        COUNT_TEMPLATE, TRANSFORM_SETUP_TEMPLATE,
-                       TRANSFORM_TEMPLATE)
+                       TRANSFORM_TEMPLATE, SCATTER_SETUP_TEMPLATE,
+                       SCATTER_TEMPLATE)
 
 
 NP_TYPE_TO_CTYPE = OrderedDict([('int8', 'int8_t'),
@@ -615,6 +616,86 @@ class DeviceViewGroup(object):
             self.TRANSFORM_CACHE[transform_tuple] = foo
         return out, group, foo
 
+    def scatter(self, out_size, in_operations, out_operations):
+        '''
+        For each sequence defined in list of `in_operations`, scatter values to
+        respective sequence defined in `out_operations`.
+
+        Arguments
+        ---------
+
+         - `out_size`: Number of values to scatter.  This is required, since it
+           is simpler than inferring from sequences.
+           * __Warning__: An incorrect value for `out_size` may lead to a
+             segmentation fault.
+         - `in_operations`: List of (or single) theano operations, which may
+           involve column tensors of the view group.
+         - `out_operations`: List of (or single) theano operations, where each
+           operation represents the output sequence for the respective sequence
+           in `in_operations`.
+         -
+
+        Examples
+        --------
+
+        The following examples are valid, assuming columns `c` and `d` are the
+        same length.  Note that
+
+            c, d = cd.tensor(['c', 'd'])
+
+            ## Working ##
+            cd.scatter(cd.size, T.arange(11, ddf_d.size + 11), d.take(T.arange(0)))  # d[:] = np.arange(11, d.size + 11)
+            cd.scatter(cd.size, ddf_d.size - 1 - T.arange(ddf_d.size), d.take(T.arange(0)))  # d[:] = np.arange(ddf_d.size - 1, 0, -1)
+            cd.scatter(cd.size, c - c + 4.3, d.take(T.arange(0)))  # d[:] = 4.3
+            cd.scatter(cd.size, c.take(T.arange(0)), d.take(T.arange(0)))  # d[:] = c[:]
+
+
+        TODO
+        ----
+
+        The following examples currently result in compilation errors:
+
+            ## Compile error ##
+            cd.scatter(cd.size, c, d)  # d[:] = c[:]
+            cd.scatter(cd.size, 11, d)  # d[:] = 11
+            cd.scatter(cd.size, T.constant(11), d)  # d[:] = 11
+
+        Fix `theano_helpers` to support the above examples.
+
+         - Add support for single column tensors as valid operations.
+         - Add support for constant values as valid operations.
+        '''
+        try:
+            assert(len(in_operations) > 0)
+            assert(len(in_operations) == len(out_operations))
+        except TypeError:
+            # At least one of `in_operations`, `out_operations` is not a
+            # iterable. Assume a single operator was passed.
+            in_operations = [in_operations]
+            out_operations = [out_operations]
+        transforms_in = [self._context.build_transform(t, 'in%s' % hash(t))
+                         for t in in_operations]
+        transforms_out = [self._context.build_transform(t, 'out%s' % hash(t))
+                          for t in out_operations]
+
+        setup = (jinja2.Template(SCATTER_SETUP_TEMPLATE)
+                 .render(transforms_in=transforms_in,
+                         transforms_out=transforms_out))
+        code = (jinja2.Template(SCATTER_TEMPLATE)
+                .render(transforms_in=transforms_in,
+                        transforms_out=transforms_out))
+
+        include_dirs = np.concatenate([t.get_includes()
+                                       for t in transforms_in +
+                                       transforms_out]).tolist()
+
+        scatter_func = self.inline_func(self.columns,
+                                        include_dirs=include_dirs, setup=setup,
+                                        code=code,
+                                        context=dict(preargs='uint32_t N, '))
+        scatter_func(out_size, *self.v.values())
+        return self
+
 
 class DeviceVectorCollection(DeviceViewGroup):
     '''
@@ -900,11 +981,6 @@ class GroupBy(object):
         # (i.e., a key column will not have the same name as
         # any value column).
         if out is None:
-            out_values = np.array([np.zeros(view.size, dtype=view.dtype)
-                                   for column, view in self.value_views.v
-                                   .iteritems()
-                                   for op in reduce_op]).T
-
             out_vectors = OrderedDict(
                 [(column, np.zeros(view.size, dtype=view.dtype))
                  for column, view in self.key_views.v.iteritems()] +
