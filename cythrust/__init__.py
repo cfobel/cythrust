@@ -673,9 +673,11 @@ class DeviceViewGroup(object):
             # iterable. Assume a single operator was passed.
             in_operations = [in_operations]
             out_operations = [out_operations]
-        transforms_in = [self._context.build_transform(t, 'in%s' % hash(t))
+        transforms_in = [self._context.build_transform(t, 'scatter_in%s' %
+                                                       hash(t))
                          for t in in_operations]
-        transforms_out = [self._context.build_transform(t, 'out%s' % hash(t))
+        transforms_out = [self._context.build_transform(t, 'scatter_out%s' %
+                                                        hash(t))
                           for t in out_operations]
 
         setup = (jinja2.Template(SCATTER_SETUP_TEMPLATE)
