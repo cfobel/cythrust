@@ -112,7 +112,7 @@ def {% if func_name %}{{ func_name }}{% else %}__foo__{% endif %} (
     pass'''
 
 
-REDUCE_TEMPLATE = '''
+REDUCE_BY_KEY_TEMPLATE = '''
 from cython.operator cimport dereference as deref, preincrement as inc
 from libc.stdint cimport (int8_t, int16_t, int32_t, int64_t,
                           uint8_t, uint16_t, uint32_t, uint64_t)

@@ -14,7 +14,7 @@ try:
     import pandas as pd
 except:
     pass
-from .template import (SORT_TEMPLATE, BASE_TEMPLATE, REDUCE_TEMPLATE,
+from .template import (SORT_TEMPLATE, BASE_TEMPLATE, REDUCE_BY_KEY_TEMPLATE,
                        COUNT_TEMPLATE, TRANSFORM_SETUP_TEMPLATE,
                        TRANSFORM_TEMPLATE, SCATTER_SETUP_TEMPLATE,
                        SCATTER_TEMPLATE)
@@ -1086,7 +1086,7 @@ def get_reduce_func(context, key_modules, key_dtypes, value_modules,
     if value_out_dtypes is None:
         value_out_dtypes = value_dtypes
 
-    template = jinja2.Template(REDUCE_TEMPLATE)
+    template = jinja2.Template(REDUCE_BY_KEY_TEMPLATE)
     code = template.render(key_modules=key_modules,
                            key_dtypes=key_dtypes,
                            value_modules=value_modules,
