@@ -757,7 +757,9 @@ class DeviceViewGroup(object):
         n = float(self.size)
         for column in self.columns:
             mean = result[column, 'sum'] / n
-            std = np.sqrt((result[column, 'sqr_sum'] - n * mean * mean) / n)
+            sum_ = result[column, 'sum']
+            sqr_sum = result[column, 'sqr_sum']
+            std = np.sqrt((sqr_sum - (sum_ * sum_) / float(n)) / (n - 1))
             result[column, 'mean'] = mean
             result[column, 'std'] = std
             result[column, 'count'] = n
