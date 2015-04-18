@@ -498,8 +498,9 @@ from {{ t.functor_name }}.{{ t.functor_name }} cimport {{ t.functor_name }}
 from cythrust.thrust.iterator.zip_iterator cimport make_zip_iterator, zip_iterator
 from cythrust.thrust.tuple cimport (make_tuple2, make_tuple3, make_tuple4,
                                     make_tuple5, make_tuple6, make_tuple7,
-                                    tuple2, tuple3, tuple4,
-                                    tuple5, tuple6, tuple7)
+                                    make_tuple8, make_tuple9, tuple2, tuple3,
+                                    tuple4, tuple5, tuple6, tuple7, tuple8,
+                                    tuple9)
 from cythrust.thrust.copy cimport copy_n
 
 ctypedef {% if transforms|length > 1 %}tuple{{ transforms|length }}[{% endif %}
@@ -543,8 +544,9 @@ SCATTER_SETUP_TEMPLATE = '''
 from cythrust.thrust.iterator.zip_iterator cimport make_zip_iterator, zip_iterator
 from cythrust.thrust.tuple cimport (make_tuple2, make_tuple3, make_tuple4,
                                     make_tuple5, make_tuple6, make_tuple7,
-                                    tuple2, tuple3, tuple4,
-                                    tuple5, tuple6, tuple7)
+                                    make_tuple8, make_tuple9, tuple2, tuple3,
+                                    tuple4, tuple5, tuple6, tuple7, tuple8,
+                                    tuple9)
 from cythrust.thrust.copy cimport copy_n
 
 {% for k, transforms in (('in', transforms_in), ('out', transforms_out)) %}
@@ -597,8 +599,9 @@ from libc.stdint cimport (int8_t, int16_t, int32_t, int64_t,
 from cythrust.thrust.iterator.zip_iterator cimport make_zip_iterator, zip_iterator
 from cythrust.thrust.tuple cimport (make_tuple2, make_tuple3, make_tuple4,
                                     make_tuple5, make_tuple6, make_tuple7,
-                                    tuple2, tuple3, tuple4,
-                                    tuple5, tuple6, tuple7)
+                                    make_tuple8, make_tuple9, tuple2, tuple3,
+                                    tuple4, tuple5, tuple6, tuple7, tuple8,
+                                    tuple9)
 from cythrust.thrust.reduce cimport reduce_n
 from cythrust.thrust.copy cimport copy_n
 
