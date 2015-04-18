@@ -592,6 +592,8 @@ SCATTER_TEMPLATE = '''
 '''
 
 REDUCE_SETUP_TEMPLATE = '''
+from libc.stdint cimport (int8_t, int16_t, int32_t, int64_t,
+                          uint8_t, uint16_t, uint32_t, uint64_t)
 import pandas as pd
 from cython.operator cimport dereference as deref, preincrement as inc
 from libc.stdint cimport (int8_t, int16_t, int32_t, int64_t,
@@ -604,6 +606,9 @@ from cythrust.thrust.tuple cimport (make_tuple2, make_tuple3, make_tuple4,
                                     tuple9)
 from cythrust.thrust.reduce cimport reduce_n
 from cythrust.thrust.copy cimport copy_n
+
+ctypedef float float32_t
+ctypedef double float64_t
 
 {% for t in transforms %}
 from {{ t.functor_name }}.{{ t.functor_name }} cimport {{ t.functor_name }}
@@ -656,7 +661,7 @@ REDUCE_TEMPLATE = '''
 
     cdef result_type init_values =
     {%- if init_values|length > 1 %} result_type({% endif %}
-    {%- for v in init_values %}{{ v }}
+    {%- for v in init_values %}<{{ transforms[loop.index0].dfg.operation_graph.owner.out.dtype }}_t>{{ v }}
         {%- if not loop.last %}, {% endif -%}
     {% endfor %}
     {%- if transforms|length > 1 %}){% endif %}
@@ -668,7 +673,7 @@ REDUCE_TEMPLATE = '''
 {% endfor %}
 {%- if init_values|length > 1 %})){% endif %}, N,
 {%- if init_values|length > 1 %} result_type({% endif %}
-{%- for v in init_values %}{{ v }}
+{%- for v in init_values %}<{{ transforms[loop.index0].dfg.operation_graph.owner.out.dtype }}_t>{{ v }}
     {%- if not loop.last %}, {% endif -%}
 {% endfor %}
 {%- if transforms|length > 1 %}){% endif %}, deref(reduce_op))
@@ -680,8 +685,7 @@ REDUCE_TEMPLATE = '''
     return_vals = []
     {% for t in transforms %}
     cdef {{ named_positions[loop.index0] }}[{{ t.dfg.operation_graph.owner.out.dtype }}_t] *{{ named_positions[loop.index0] }}_ = new {{ named_positions[loop.index0] }}[{{ t.dfg.operation_graph.owner.out.dtype }}_t]()
-    return_vals.append(deref({{ named_positions[loop.index0] }}_)(result))
-    del {{ named_positions[loop.index0] }}_
+    return_vals.append({% if t.dfg.operation_graph.owner.out.dtype.startswith('float') %}<double>{% endif %}deref({{ named_positions[loop.index0] }}_)(result))
     {% endfor %}
     return return_vals
     {% else %}
