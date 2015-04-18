@@ -571,7 +571,7 @@ class DeviceViewGroup(object):
     def size(self):
         sizes = self.sizes.values()
         assert(min(sizes) == max(sizes))
-        return sizes
+        return sizes[0]
 
     @property
     def vector_sizes(self):
