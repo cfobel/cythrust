@@ -14,7 +14,8 @@ try:
     import pandas as pd
 except:
     pass
-from .template import SORT_TEMPLATE, BASE_TEMPLATE
+from .template import (SORT_TEMPLATE, BASE_TEMPLATE, REDUCE_TEMPLATE,
+                       COUNT_TEMPLATE)
 
 
 NP_TYPE_TO_CTYPE = OrderedDict([('int8', 'int8_t'),
@@ -28,6 +29,9 @@ NP_TYPE_TO_CTYPE = OrderedDict([('int8', 'int8_t'),
                                 ('float32', 'float'),
                                 ('float', 'double'),
                                 ('float64', 'double')])
+
+PANDAS_TO_THRUST = {'sum': 'plus', 'product': 'multiplies',
+                    'min': 'minimum', 'max': 'maximum'}
 
 
 class Functor(object):
@@ -350,6 +354,11 @@ class DeviceViewGroup(object):
                                          .iteritems()]),
                             index=range(*self.index_bounds()))
 
+    def reset_views(self):
+        for column in self.columns:
+            self.v[column].first_i = 0
+            self.v[column].last_i = self.d[column].size - 1
+
     def index_bounds(self):
         sample_view = self._view_dict.values()[0]
         first_i = sample_view.first_i
@@ -531,9 +540,17 @@ class DeviceViewGroup(object):
         return self._view_dict.values()
 
     @property
-    def size(self):
+    def sizes(self):
         return OrderedDict([(k, v.size)
                             for k, v in self._view_dict.iteritems()])
+
+    @property
+    def vector_sizes(self):
+        return OrderedDict([(k, d.size)
+                            for k, d in self._data_dict.iteritems()])
+
+    def groupby(self, key_columns, sort=True):
+        return GroupBy(self, key_columns)
 
 
 class DeviceVectorCollection(DeviceViewGroup):
@@ -680,7 +697,19 @@ class DeviceDataFrame(DeviceVectorCollection):
 
     @property
     def size(self):
-        return self._view_dict.values()[0].size
+        sizes = self.sizes
+        min_size = min(sizes.values())
+        max_size = max(sizes.values())
+        assert(min_size == max_size)
+        return max_size
+
+    @property
+    def vector_size(self):
+        sizes = self.vector_sizes
+        min_size = min(sizes.values())
+        max_size = max(sizes.values())
+        assert(min_size == max_size)
+        return max_size
 
     def view(self, start, end=None):
         '''
@@ -719,6 +748,165 @@ class DeviceDataFrame(DeviceVectorCollection):
         return result
 
 
+class GroupBy(object):
+    def __init__(self, views, key_columns, sort=True, stable=False):
+        self.views = views
+        self.key_views = views[key_columns]
+        self.value_views = views[[c for c in self.views.columns
+                                  if c not in key_columns]]
+        key_columns = self.key_views.columns
+        value_columns = self.value_views.columns
+        key_modules = tuple(self.key_views.get_vector_module(key_columns))
+        key_dtypes = tuple(self.key_views.get_dtype(key_columns))
+        value_modules = tuple(self.value_views.get_vector_module(value_columns))
+        value_dtypes = tuple(self.value_views.get_dtype(value_columns))
+
+        self.sort_func = get_sort_func(views._context, key_modules, key_dtypes,
+                                       value_modules, value_dtypes, stable=stable)
+
+        if sort:
+            self.sort()
+
+    def sort(self):
+        self.sort_func(*(self.key_views.v.values() + self.value_views.v.values()))
+
+    def get_count_func(self, out):
+        key_columns = self.key_views.columns
+        key_modules = tuple(self.key_views.get_vector_module(key_columns))
+        key_dtypes = tuple(self.key_views.get_dtype(key_columns))
+        key_ctypes = tuple(self.key_views.get_ctype(key_columns))
+        count_modules = (out.get_vector_module('count'), )
+        count_dtypes = (out.get_dtype('count'), )
+        count_ctypes = (out.get_ctype('count'), )
+
+        return get_count_func(self.views._context, key_modules, key_dtypes,
+                              count_modules, count_dtypes, key_ctypes,
+                              count_ctypes)
+
+    def get_reduce_func(self, reduce_ops, value_columns=None):
+        # TODO: Optionally accept `out` kwarg to infer iterator and module
+        # types from output device data frame.
+        key_columns = self.key_views.columns
+        if value_columns is None:
+            value_columns = self.value_views.columns
+        key_modules = tuple(self.key_views.get_vector_module(key_columns))
+        key_dtypes = tuple(self.key_views.get_dtype(key_columns))
+        key_ctypes = tuple(self.key_views.get_ctype(key_columns))
+        value_modules = tuple(self.value_views.get_vector_module(value_columns))
+        value_dtypes = tuple(self.value_views.get_dtype(value_columns))
+        value_ctypes = tuple(self.value_views.get_ctype(value_columns))
+        assert(len(reduce_ops) == len(value_columns))
+
+        return get_reduce_func(self.views._context, key_modules, key_dtypes,
+                               value_modules, value_dtypes, key_ctypes,
+                               value_ctypes, tuple(reduce_ops))
+
+    def ref_agg(self, reduce_op):
+        '''
+        Perform reduction using `pandas.DataFrame.agg`.
+        '''
+        ref_result = (self.views.df.groupby(self.key_views.columns)
+                      .agg(reduce_op))
+        # When applying multiple reduce operations, `pandas` creates a
+        # multi-level index for result.  To match output from `GroupBy.agg`,
+        # flatten multi-level index in result by appending the first level as a
+        # prefix in the form `<value column name>_<operation name>`.
+        if not isinstance(reduce_op, str):
+            ref_result.columns = ['_'.join(col).strip()
+                                  for col in ref_result.columns.values]
+        return ref_result.reset_index()
+
+    def agg(self, reduce_op, out=None, bounds_check=True):
+        '''
+        Perform reduction using `cythrust.thrust.reduce_by_key`.
+        '''
+        if isinstance(reduce_op, str):
+            value_columns = self.value_views.v.keys()
+            reduce_ops = [reduce_op, ] * len(value_columns)
+            reduce_op = (reduce_op, )
+        else:
+            value_columns = [column
+                             for column in self.value_views.v.keys()
+                             for op in reduce_op]
+            reduce_ops = np.tile(reduce_op, len(self.value_views.v)).tolist()
+
+        # __NB__ Key columns and value columns are all unique
+        # (i.e., a key column will not have the same name as
+        # any value column).
+        if out is None:
+            out_values = np.array([np.zeros(view.size, dtype=view.dtype)
+                                   for column, view in self.value_views.v
+                                   .iteritems()
+                                   for op in reduce_op]).T
+
+            out_vectors = OrderedDict(
+                [(column, np.zeros(view.size, dtype=view.dtype))
+                 for column, view in self.key_views.v.iteritems()] +
+                [('%s_%s' % (column, op),
+                  np.zeros(view.size, dtype=view.dtype))
+                 for column, view in self.value_views.v.iteritems()
+                 for op in reduce_op])
+            out = DeviceDataFrame(out_vectors)
+        elif bounds_check:
+            # Check to make sure that the views are large enough.
+            if hasattr(out, 'vector_size'):
+                assert(out.vector_size >= self.views.size)
+            else:
+                for view in out.v.itervalues():
+                    assert(view.size >= self.views.size)
+
+        func = self.get_reduce_func([PANDAS_TO_THRUST[op]
+                                     for op in reduce_ops],
+                                    value_columns=value_columns)
+        in_views = self.key_views.v.values() + [self.value_views.v[c]
+                                                for c in value_columns]
+        out_views = out.v.values()
+
+        reduced_key_count = func(*(in_views + out_views))
+
+        for view in out.v.itervalues():
+            view.last_i = reduced_key_count - 1
+        return out
+
+    def ref_count(self):
+        '''
+        Perform count using `pandas.DataFrame.agg`.
+        '''
+        first_col = self.value_views.columns[0]
+        ref_out = (self.views.df.groupby(self.key_views.columns)
+                   .agg({first_col: 'count'})
+                   .rename(columns={first_col: 'count'}))
+        return ref_out.reset_index()
+
+    def count(self, out=None, bounds_check=True):
+        '''
+        Perform count by key using `cythrust.thrust.reduce_by_key`.
+        '''
+        if out is None:
+            out_vectors = OrderedDict(
+                [(column, np.zeros(view.size, dtype=view.dtype))
+                 for column, view in self.key_views.v.iteritems()] +
+                [('count', np.zeros(self.views.size, dtype='uint32'))])
+            out = DeviceDataFrame(out_vectors)
+        elif bounds_check:
+            # Check to make sure that the views are large enough.
+            if hasattr(out, 'vector_size'):
+                assert(out.vector_size >= self.views.size)
+            else:
+                for view in out.v.itervalues():
+                    assert(view.size >= self.views.size)
+
+        func = self.get_count_func(out)
+        in_views = self.key_views.v.values()
+        out_views = out.v.values()
+
+        reduced_key_count = func(*(in_views + out_views))
+
+        for view in out.v.itervalues():
+            view.last_i = reduced_key_count - 1
+        return out
+
+
 @functools32.lru_cache()
 def get_sort_func(context, key_modules, key_dtypes, value_modules=None,
                   value_dtypes=None, stable=False):
@@ -737,3 +925,67 @@ def get_sort_func(context, key_modules, key_dtypes, value_modules=None,
         raise
     exec('from %s import sort_func as __sort_func__' % module_name)
     return __sort_func__
+
+
+@functools32.lru_cache()
+def get_reduce_func(context, key_modules, key_dtypes, value_modules,
+                    value_dtypes, key_ctypes, value_ctypes,
+                    reduce_ops, key_out_modules=None, key_out_dtypes=None,
+                    value_out_modules=None, value_out_dtypes=None):
+    # By default, use input key/value types for output keys/values.
+    if key_out_modules is None:
+        key_out_modules = key_modules
+    if key_out_dtypes is None:
+        key_out_dtypes = key_dtypes
+    if value_out_modules is None:
+        value_out_modules = value_modules
+    if value_out_dtypes is None:
+        value_out_dtypes = value_dtypes
+
+    template = jinja2.Template(REDUCE_TEMPLATE)
+    code = template.render(key_modules=key_modules,
+                           key_dtypes=key_dtypes,
+                           value_modules=value_modules,
+                           value_dtypes=value_dtypes,
+                           key_ctypes=key_ctypes,
+                           value_ctypes=value_ctypes,
+                           reduce_ops=reduce_ops,
+                           key_out_modules=key_out_modules,
+                           key_out_dtypes=key_out_dtypes,
+                           value_out_modules=value_out_modules,
+                           value_out_dtypes=value_out_dtypes)
+    try:
+        module_path, module_name = context.inline_pyx_module(code)
+    except:
+        print code
+        raise
+    exec('from %s import reduce_by_key_func as __reduce_func__' % module_name)
+    return __reduce_func__
+
+
+@functools32.lru_cache()
+def get_count_func(context, key_modules, key_dtypes, value_out_modules,
+                   value_out_dtypes, key_ctypes, value_out_ctypes,
+                   key_out_modules=None, key_out_dtypes=None):
+    # By default, use input key/value types for output keys/values.
+    if key_out_modules is None:
+        key_out_modules = key_modules
+    if key_out_dtypes is None:
+        key_out_dtypes = key_dtypes
+
+    template = jinja2.Template(COUNT_TEMPLATE)
+    code = template.render(key_modules=key_modules,
+                           key_dtypes=key_dtypes,
+                           key_ctypes=key_ctypes,
+                           value_out_modules=value_out_modules,
+                           value_out_dtypes=value_out_dtypes,
+                           value_out_ctypes=value_out_ctypes,
+                           key_out_modules=key_out_modules,
+                           key_out_dtypes=key_out_dtypes)
+    try:
+        module_path, module_name = context.inline_pyx_module(code)
+    except:
+        print code
+        raise
+    exec('from %s import count_by_key_func as __count_func__' % module_name)
+    return __count_func__
