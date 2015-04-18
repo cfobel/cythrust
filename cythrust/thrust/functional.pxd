@@ -1,3 +1,6 @@
+from cythrust.thrust.tuple cimport tuple2
+
+
 cdef extern from "<thrust/functional.h>" namespace "thrust" nogil:
     cdef cppclass unary_function[Argument, Result]:
         pass
@@ -101,6 +104,9 @@ cdef extern from "src/functional.hpp" namespace "cythrust" nogil:
     cdef cppclass square[T]:
         pass
 
+    cdef cppclass square_root[T]:
+        pass
+
     cdef cppclass reduce_plus4_with_dummy[T]:
         pass
 
@@ -128,6 +134,21 @@ cdef extern from "src/functional.hpp" namespace "cythrust" nogil:
     cdef cppclass fourth[T]:
         T operator()[T1](T1 a)
 
+    cdef cppclass fifth[T]:
+        T operator()[T1](T1 a)
+
+    cdef cppclass sixth[T]:
+        T operator()[T1](T1 a)
+
+    cdef cppclass seventh[T]:
+        T operator()[T1](T1 a)
+
+    cdef cppclass eighth[T]:
+        T operator()[T1](T1 a)
+
+    cdef cppclass ninth[T]:
+        T operator()[T1](T1 a)
+
 
 cdef extern from "src/unpack_args.hpp":
     cdef cppclass unpack_binary_args[Functor]:
@@ -147,8 +168,11 @@ cdef extern from "src/unpack_args.hpp":
 
 
 cdef extern from "src/functional_tuples.hpp" namespace "cythrust" nogil:
-    cdef cppclass reduce2[F1, F2]:
+    cdef cppclass reduce2pair[F1, F2]:
         pass
+
+    cdef cppclass reduce2[F1, F2]:
+        tuple2[T1, T2] operator()[T1, T2](T1 a, T2 b)
 
     cdef cppclass reduce3[F1, F2, F3]:
         pass
