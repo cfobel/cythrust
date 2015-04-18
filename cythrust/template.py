@@ -112,7 +112,7 @@ def {% if func_name %}{{ func_name }}{% else %}__foo__{% endif %} (
     pass'''
 
 
-REDUCE_TEMPLATE = '''
+REDUCE_BY_KEY_TEMPLATE = '''
 from cython.operator cimport dereference as deref, preincrement as inc
 from libc.stdint cimport (int8_t, int16_t, int32_t, int64_t,
                           uint8_t, uint16_t, uint32_t, uint64_t)
@@ -498,8 +498,9 @@ from {{ t.functor_name }}.{{ t.functor_name }} cimport {{ t.functor_name }}
 from cythrust.thrust.iterator.zip_iterator cimport make_zip_iterator, zip_iterator
 from cythrust.thrust.tuple cimport (make_tuple2, make_tuple3, make_tuple4,
                                     make_tuple5, make_tuple6, make_tuple7,
-                                    tuple2, tuple3, tuple4,
-                                    tuple5, tuple6, tuple7)
+                                    make_tuple8, make_tuple9, tuple2, tuple3,
+                                    tuple4, tuple5, tuple6, tuple7, tuple8,
+                                    tuple9)
 from cythrust.thrust.copy cimport copy_n
 
 ctypedef {% if transforms|length > 1 %}tuple{{ transforms|length }}[{% endif %}
@@ -543,8 +544,9 @@ SCATTER_SETUP_TEMPLATE = '''
 from cythrust.thrust.iterator.zip_iterator cimport make_zip_iterator, zip_iterator
 from cythrust.thrust.tuple cimport (make_tuple2, make_tuple3, make_tuple4,
                                     make_tuple5, make_tuple6, make_tuple7,
-                                    tuple2, tuple3, tuple4,
-                                    tuple5, tuple6, tuple7)
+                                    make_tuple8, make_tuple9, tuple2, tuple3,
+                                    tuple4, tuple5, tuple6, tuple7, tuple8,
+                                    tuple9)
 from cythrust.thrust.copy cimport copy_n
 
 {% for k, transforms in (('in', transforms_in), ('out', transforms_out)) %}
@@ -587,4 +589,106 @@ SCATTER_TEMPLATE = '''
 {% endfor -%}
 {% if transforms_out|length > 1 %})){% endif %})
     return N
+'''
+
+REDUCE_SETUP_TEMPLATE = '''
+from libc.stdint cimport (int8_t, int16_t, int32_t, int64_t,
+                          uint8_t, uint16_t, uint32_t, uint64_t)
+import pandas as pd
+from cython.operator cimport dereference as deref, preincrement as inc
+from libc.stdint cimport (int8_t, int16_t, int32_t, int64_t,
+                          uint8_t, uint16_t, uint32_t, uint64_t)
+from cythrust.thrust.iterator.zip_iterator cimport make_zip_iterator, zip_iterator
+from cythrust.thrust.tuple cimport (make_tuple2, make_tuple3, make_tuple4,
+                                    make_tuple5, make_tuple6, make_tuple7,
+                                    make_tuple8, make_tuple9, tuple2, tuple3,
+                                    tuple4, tuple5, tuple6, tuple7, tuple8,
+                                    tuple9)
+from cythrust.thrust.reduce cimport reduce_n
+from cythrust.thrust.copy cimport copy_n
+
+ctypedef float float32_t
+ctypedef double float64_t
+
+{% for t in transforms %}
+from {{ t.functor_name }}.{{ t.functor_name }} cimport {{ t.functor_name }}
+{% endfor %}
+ctypedef {% if transforms|length > 1 %}tuple{{ transforms|length }}[{% endif %}
+{%- for t in transforms -%}
+{{ t.functor_name }}.iterator
+{%- if not loop.last %}, {% endif -%}
+{% endfor -%}
+{% if transforms|length > 1 %}]{% endif %} input_tuple
+ctypedef zip_iterator[input_tuple] input_iterator
+
+# Functors
+from cythrust.thrust.functional cimport {% for name in named_positions -%}
+{{ name }},
+{%- endfor %} {% for op in reduce_ops -%}
+{{ op }}
+{%- if not loop.last %}, {% endif -%}
+{% endfor -%}
+{%- if transforms|length > 1 %}, reduce{{ transforms|length }}{% endif %}
+
+
+ctypedef {% if transforms|length > 1 %}tuple{{ transforms|length }}[{% endif %}
+{%- for t in transforms %}{{ t.dfg.operation_graph.owner.out.dtype }}_t
+    {%- if not loop.last %}, {% endif -%}
+{% endfor %}
+{%- if transforms|length > 1 %}]{% endif %} result_type
+'''
+
+REDUCE_TEMPLATE = '''
+{% for t in transforms %}
+    cdef {{ t.functor_name }} *op_{{ loop.index }} = new {{ t.functor_name }}(
+    {%- for column in t.thrust_code.graph_inputs -%}
+    <{{ t.functor_name }}.{{ column }}_t>{{ column }}._begin
+    {%- if not loop.last %}, {% endif -%}
+    {% endfor %})
+{% endfor %}
+
+    cdef
+{%- if transforms|length > 1 %} reduce{{ transforms|length }}[{% endif %}
+{%- for t in transforms %} {{ reduce_ops[loop.index0] }}[{{ t.dfg.operation_graph.owner.out.dtype }}_t]
+    {%- if not loop.last %}, {% endif -%}
+{% endfor %}
+{%- if transforms|length > 1 %}]{% endif %} *reduce_op = new
+{%- if transforms|length > 1 %} reduce{{ transforms|length }}[{% endif %}
+{%- for t in transforms %} {{ reduce_ops[loop.index0] }}[{{ t.dfg.operation_graph.owner.out.dtype }}_t]
+    {%- if not loop.last %}, {% endif -%}
+{% endfor %}
+{%- if transforms|length > 1 %}]{% endif %}()
+
+    cdef result_type init_values =
+    {%- if init_values|length > 1 %} result_type({% endif %}
+    {%- for v in init_values %}<{{ transforms[loop.index0].dfg.operation_graph.owner.out.dtype }}_t>{{ v }}
+        {%- if not loop.last %}, {% endif -%}
+    {% endfor %}
+    {%- if transforms|length > 1 %}){% endif %}
+
+    cdef result_type result = reduce_n(
+{%- if init_values|length > 1 %} make_zip_iterator(make_tuple{{ transforms|length }}({% endif %}
+{%- for v in init_values %} op_{{ loop.index }}.begin()
+    {%- if not loop.last %}, {% endif -%}
+{% endfor %}
+{%- if init_values|length > 1 %})){% endif %}, N,
+{%- if init_values|length > 1 %} result_type({% endif %}
+{%- for v in init_values %}<{{ transforms[loop.index0].dfg.operation_graph.owner.out.dtype }}_t>{{ v }}
+    {%- if not loop.last %}, {% endif -%}
+{% endfor %}
+{%- if transforms|length > 1 %}){% endif %}, deref(reduce_op))
+
+    del op_1
+    del reduce_op
+
+    {% if transforms|length > 1 %}
+    return_vals = []
+    {% for t in transforms %}
+    cdef {{ named_positions[loop.index0] }}[{{ t.dfg.operation_graph.owner.out.dtype }}_t] *{{ named_positions[loop.index0] }}_ = new {{ named_positions[loop.index0] }}[{{ t.dfg.operation_graph.owner.out.dtype }}_t]()
+    return_vals.append({% if t.dfg.operation_graph.owner.out.dtype.startswith('float') %}<double>{% endif %}deref({{ named_positions[loop.index0] }}_)(result))
+    {% endfor %}
+    return return_vals
+    {% else %}
+    return result
+    {% endif %}
 '''

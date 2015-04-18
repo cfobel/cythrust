@@ -1,3 +1,7 @@
+from cythrust.thrust.tuple cimport (tuple2, tuple3, tuple4, tuple5, tuple6,
+                                    tuple7, tuple8, tuple9)
+
+
 cdef extern from "<thrust/functional.h>" namespace "thrust" nogil:
     cdef cppclass unary_function[Argument, Result]:
         pass
@@ -101,6 +105,9 @@ cdef extern from "src/functional.hpp" namespace "cythrust" nogil:
     cdef cppclass square[T]:
         pass
 
+    cdef cppclass square_root[T]:
+        pass
+
     cdef cppclass reduce_plus4_with_dummy[T]:
         pass
 
@@ -128,6 +135,21 @@ cdef extern from "src/functional.hpp" namespace "cythrust" nogil:
     cdef cppclass fourth[T]:
         T operator()[T1](T1 a)
 
+    cdef cppclass fifth[T]:
+        T operator()[T1](T1 a)
+
+    cdef cppclass sixth[T]:
+        T operator()[T1](T1 a)
+
+    cdef cppclass seventh[T]:
+        T operator()[T1](T1 a)
+
+    cdef cppclass eighth[T]:
+        T operator()[T1](T1 a)
+
+    cdef cppclass ninth[T]:
+        T operator()[T1](T1 a)
+
 
 cdef extern from "src/unpack_args.hpp":
     cdef cppclass unpack_binary_args[Functor]:
@@ -147,17 +169,29 @@ cdef extern from "src/unpack_args.hpp":
 
 
 cdef extern from "src/functional_tuples.hpp" namespace "cythrust" nogil:
-    cdef cppclass reduce2[F1, F2]:
+    cdef cppclass reduce2pair[F1, F2]:
         pass
 
-    cdef cppclass reduce3[F1, F2, F3]:
-        pass
+    cdef cppclass reduce2[F0, F1]:
+        tuple2[T0, T1] operator()[T0, T1](T0 a,T1 b)
 
-    cdef cppclass reduce4[F1, F2, F3, F4]:
-        pass
+    cdef cppclass reduce3[F0, F1, F2]:
+        tuple3[T0, T1, T2] operator()[T0, T1, T2](T0 a,T1 b,T2 c)
 
-    cdef cppclass reduce5[F1, F2, F3, F4, F5]:
-        pass
+    cdef cppclass reduce4[F0, F1, F2, F3]:
+        tuple4[T0, T1, T2, T3] operator()[T0, T1, T2, T3](T0 a,T1 b,T2 c,T3 d)
 
-    cdef cppclass reduce6[F1, F2, F3, F4, F5, F6]:
-        pass
+    cdef cppclass reduce5[F0, F1, F2, F3, F4]:
+        tuple5[T0, T1, T2, T3, T4] operator()[T0, T1, T2, T3, T4](T0 a,T1 b,T2 c,T3 d,T4 e)
+
+    cdef cppclass reduce6[F0, F1, F2, F3, F4, F5]:
+        tuple6[T0, T1, T2, T3, T4, T5] operator()[T0, T1, T2, T3, T4, T5](T0 a,T1 b,T2 c,T3 d,T4 e,T5 f)
+
+    cdef cppclass reduce7[F0, F1, F2, F3, F4, F5, F6]:
+        tuple7[T0, T1, T2, T3, T4, T5, T6] operator()[T0, T1, T2, T3, T4, T5, T6](T0 a,T1 b,T2 c,T3 d,T4 e,T5 f,T6 g)
+
+    cdef cppclass reduce8[F0, F1, F2, F3, F4, F5, F6, F7]:
+        tuple8[T0, T1, T2, T3, T4, T5, T6, T7] operator()[T0, T1, T2, T3, T4, T5, T6, T7](T0 a,T1 b,T2 c,T3 d,T4 e,T5 f,T6 g,T7 h)
+
+    cdef cppclass reduce9[F0, F1, F2, F3, F4, F5, F6, F7, F8]:
+        tuple9[T0, T1, T2, T3, T4, T5, T6, T7, T8] operator()[T0, T1, T2, T3, T4, T5, T6, T7, T8](T0 a,T1 b,T2 c,T3 d,T4 e,T5 f,T6 g,T7 h,T8 i)

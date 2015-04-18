@@ -6,7 +6,6 @@
 
 
 namespace cythrust {
-
   template <typename T>
   struct first {
     typedef T result_type;
@@ -17,7 +16,6 @@ namespace cythrust {
       return thrust::get<0>(a);
     }
   };
-
 
   template <typename T>
   struct second {
@@ -30,7 +28,6 @@ namespace cythrust {
     }
   };
 
-
   template <typename T>
   struct third {
     typedef T result_type;
@@ -41,7 +38,6 @@ namespace cythrust {
       return thrust::get<2>(a);
     }
   };
-
 
   template <typename T>
   struct fourth {
@@ -54,6 +50,60 @@ namespace cythrust {
     }
   };
 
+  template <typename T>
+  struct fifth {
+    typedef T result_type;
+
+    template <typename T1>
+    __host__ __device__
+    result_type operator() (T1 a) {
+      return thrust::get<4>(a);
+    }
+  };
+
+  template <typename T>
+  struct sixth {
+    typedef T result_type;
+
+    template <typename T1>
+    __host__ __device__
+    result_type operator() (T1 a) {
+      return thrust::get<5>(a);
+    }
+  };
+
+  template <typename T>
+  struct seventh {
+    typedef T result_type;
+
+    template <typename T1>
+    __host__ __device__
+    result_type operator() (T1 a) {
+      return thrust::get<6>(a);
+    }
+  };
+
+  template <typename T>
+  struct eighth {
+    typedef T result_type;
+
+    template <typename T1>
+    __host__ __device__
+    result_type operator() (T1 a) {
+      return thrust::get<7>(a);
+    }
+  };
+
+  template <typename T>
+  struct ninth {
+    typedef T result_type;
+
+    template <typename T1>
+    __host__ __device__
+    result_type operator() (T1 a) {
+      return thrust::get<8>(a);
+    }
+  };
 
   template <typename T>
   struct power {

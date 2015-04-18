@@ -10,14 +10,16 @@ from Cybuild import Context as _Context, NvccBuilder
 from path_helpers import path
 import jinja2
 import functools32
+import theano.tensor as T
 try:
     import pandas as pd
 except:
     pass
-from .template import (SORT_TEMPLATE, BASE_TEMPLATE, REDUCE_TEMPLATE,
+from .template import (SORT_TEMPLATE, BASE_TEMPLATE, REDUCE_BY_KEY_TEMPLATE,
                        COUNT_TEMPLATE, TRANSFORM_SETUP_TEMPLATE,
                        TRANSFORM_TEMPLATE, SCATTER_SETUP_TEMPLATE,
-                       SCATTER_TEMPLATE)
+                       SCATTER_TEMPLATE, REDUCE_SETUP_TEMPLATE,
+                       REDUCE_TEMPLATE)
 
 
 NP_TYPE_TO_CTYPE = OrderedDict([('int8', 'int8_t'),
@@ -34,6 +36,21 @@ NP_TYPE_TO_CTYPE = OrderedDict([('int8', 'int8_t'),
 
 PANDAS_TO_THRUST = {'sum': 'plus', 'product': 'multiplies',
                     'min': 'minimum', 'max': 'maximum'}
+
+NAMED_POSITIONS = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth',
+                   'seventh', 'eighth', 'ninth']
+
+def type_info(transform):
+    dtype = transform.dfg.operation_graph.owner.out.dtype
+    try:
+        type_info = np.iinfo(dtype)
+    except ValueError:
+        type_info = np.finfo(dtype)
+    return type_info
+
+TRANSFORM_IDENTITIES = {'plus': 0, 'multiplies': 1,
+                        'minimum': lambda t: type_info(t).max,
+                        'maximum': lambda t: type_info(t).min}
 
 
 class Functor(object):
@@ -107,7 +124,6 @@ class Transform(object):
     b  0  2  4  6  8  10  12  14  16  18
     """
     def __init__(self, operation_graph, functor_name, output_dir):
-        import tempfile
         import theano
         from theano_helpers import DataFlowGraph, ThrustCode
 
@@ -182,7 +198,8 @@ class Context(_Context):
         self.kwargs = {'pyx_kwargs': {'cplus': True},
                        'include_dirs': include_dirs + get_includes()}
         if self.device_system in ('THRUST_DEVICE_SYSTEM_CPP',
-                                  'THRUST_DEVICE_SYSTEM_TBB'):
+                                  'THRUST_DEVICE_SYSTEM_TBB',
+                                  'THRUST_DEVICE_SYSTEM_OMP'):
             self.kwargs.update({'define_macros': [('THRUST_DEVICE_SYSTEM',
                                                    device_system)],
                                 'extra_compile_args': ['-O3']})
@@ -190,6 +207,9 @@ class Context(_Context):
             self.kwargs['preargs'] = ['-O3', '-D' + self.device_system]
         if self.device_system == 'THRUST_DEVICE_SYSTEM_TBB':
             self.kwargs['extra_link_args'] = ['-ltbb']
+        elif self.device_system == 'THRUST_DEVICE_SYSTEM_OMP':
+            self.kwargs['extra_compile_args'] += ['-fopenmp']
+            self.kwargs['extra_link_args'] = ['-fopenmp']
 
     @property
     def include_dirs(self):
@@ -551,7 +571,7 @@ class DeviceViewGroup(object):
     def size(self):
         sizes = self.sizes.values()
         assert(min(sizes) == max(sizes))
-        return sizes
+        return sizes[0]
 
     @property
     def vector_sizes(self):
@@ -697,6 +717,126 @@ class DeviceViewGroup(object):
                                         context=dict(preargs='uint32_t N, '))
         scatter_func(out_size, *self.v.values())
         return self
+
+    def min(self, **kwargs):
+        return self._reduce_wrapper('minimum', **kwargs)
+
+    def max(self, **kwargs):
+        return self._reduce_wrapper('maximum', **kwargs)
+
+    def sum(self, **kwargs):
+        return self._reduce_wrapper('plus', **kwargs)
+
+    def product(self, **kwargs):
+        return self._reduce_wrapper('multiplies', **kwargs)
+
+    def describe(self, transforms=None, **kwargs):
+        reduce_ops = ['plus', 'plus', 'minimum', 'maximum']
+        if transforms is None or not transforms:
+            tensors = self.tensor(self.columns)
+            describe_ops = lambda t: [T.cast(t.take(T.arange((1 << 32) - 1)),
+                                             'float32'),
+                                      T.sqr(t),
+                                      T.cast(t.take(T.arange((1 << 32) - 1)),
+                                             'float32'),
+                                      T.cast(t.take(T.arange((1 << 32) - 1)),
+                                             'float32')]
+
+            operations = np.concatenate([describe_ops(t) for t in tensors])
+            _transforms = self.get_transforms(operations=operations)
+            if isinstance(transforms, list):
+                transforms.extend(_transforms)
+            else:
+                transforms = _transforms
+
+        index = pd.MultiIndex.from_product([self.columns, ['sum', 'sqr_sum',
+                                                           'min', 'max']])
+        result = pd.Series(self.reduce(reduce_ops * len(self.columns),
+                                       transforms=transforms),
+                           index=index)
+        n = float(self.size)
+        for column in self.columns:
+            mean = result[column, 'sum'] / n
+            std = np.sqrt((result[column, 'sqr_sum'] - n * mean * mean) / n)
+            result[column, 'mean'] = mean
+            result[column, 'std'] = std
+            result[column, 'count'] = n
+        return result.sortlevel(level=0, sort_remaining=False)
+
+    def _reduce_wrapper(self, reduce_op, **kwargs):
+        result = self.reduce(reduce_op, **kwargs)
+        if kwargs.get('operations', None) is None:
+            return pd.Series(result, index=self.columns)
+        else:
+            return result
+
+    def get_transforms(self, columns=None, operations=None):
+        if operations is None:
+            if columns is None:
+                columns = self.columns
+            tensors = self.tensor(columns)
+
+            # Create identity operation for each column, which iterate over the
+            # values of the corresponding column.
+            # TODO: Fix support for bare column tensors.  This may require
+            # changes to `theano_helpers`.
+            operations = [t.take(T.arange((1 << 32) - 1)) for t in tensors]
+        return [self._context.build_transform(t, 'reduce%s' % hash(t))
+                for t in operations]
+
+    def reduce(self, reduce_ops=None, operations=None, transforms=None,
+               init_values=None, size=None, **kwargs):
+        if transforms is None:
+            transforms = self.get_transforms(operations=operations)
+        elif isinstance(transforms, list) and not transforms:
+            transforms.extend(self.get_transforms(operations=operations))
+
+        if isinstance(reduce_ops, str):
+            reduce_ops = [reduce_ops] * len(transforms)
+        elif reduce_ops is None:
+            reduce_ops = ['plus'] * len(transforms)
+
+        if init_values is None:
+            init_values = [TRANSFORM_IDENTITIES[k]
+                           if not callable(TRANSFORM_IDENTITIES[k])
+                           else TRANSFORM_IDENTITIES[k](transforms[i])
+                           for i, k in enumerate(reduce_ops)]
+        if size is None:
+            size = self.size
+
+        # Cast arguments as tuples since cached `get_reduce_func` function
+        # requires *hashable* arguments.
+        reduce_func = self.get_reduce_func(tuple(reduce_ops),
+                                           tuple(transforms),
+                                           tuple(init_values), **kwargs)
+
+        return reduce_func(size, *self.v.values())
+
+    @functools32.lru_cache()
+    def get_reduce_func(self, reduce_ops, transforms, init_values, **kwargs):
+        '''
+        __NB__ `reduce_ops`, `transforms`, and `init_values` must all be
+        *hashable* types.  This is a requirement for using
+        `functools32.lru_cache`.
+        '''
+        setup = (jinja2.Template(REDUCE_SETUP_TEMPLATE)
+                .render(transforms=transforms,
+                        reduce_ops=reduce_ops,
+                        init_values=init_values,
+                        named_positions=NAMED_POSITIONS))
+
+        code = (jinja2.Template(REDUCE_TEMPLATE)
+                .render(transforms=transforms,
+                        reduce_ops=reduce_ops,
+                        init_values=init_values,
+                        named_positions=NAMED_POSITIONS))
+
+        include_dirs = np.concatenate([t.get_includes()
+                                       for t in transforms]).tolist()
+
+        return self.inline_func(self.columns, include_dirs=include_dirs,
+                                setup=setup, code=code,
+                                context=dict(preargs='size_t N, '), **kwargs)
 
 
 class DeviceVectorCollection(DeviceViewGroup):
@@ -1086,7 +1226,7 @@ def get_reduce_func(context, key_modules, key_dtypes, value_modules,
     if value_out_dtypes is None:
         value_out_dtypes = value_dtypes
 
-    template = jinja2.Template(REDUCE_TEMPLATE)
+    template = jinja2.Template(REDUCE_BY_KEY_TEMPLATE)
     code = template.render(key_modules=key_modules,
                            key_dtypes=key_dtypes,
                            value_modules=value_modules,

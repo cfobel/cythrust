@@ -29,3 +29,8 @@ cdef extern from "<thrust/reduce.h>" namespace "thrust" nogil:
                                           OutputIterator2 values_output,
                                           BinaryPredicate binary_pred,
                                           BinaryFunction binary_op)
+
+
+cdef extern from "src/reduce.hpp" namespace "cythrust" nogil:
+    T reduce_n 'cythrust::reduce_n' [InputIterator, T, BinaryFunction] \
+        (InputIterator first, size_t n, T init_value, BinaryFunction binary_op)
