@@ -730,6 +730,39 @@ class DeviceViewGroup(object):
     def product(self, **kwargs):
         return self._reduce_wrapper('multiplies', **kwargs)
 
+    def describe(self, transforms=None, **kwargs):
+        reduce_ops = ['plus', 'plus', 'minimum', 'maximum']
+        if transforms is None or not transforms:
+            tensors = self.tensor(self.columns)
+            describe_ops = lambda t: [T.cast(t.take(T.arange((1 << 32) - 1)),
+                                             'float32'),
+                                      T.sqr(t),
+                                      T.cast(t.take(T.arange((1 << 32) - 1)),
+                                             'float32'),
+                                      T.cast(t.take(T.arange((1 << 32) - 1)),
+                                             'float32')]
+
+            operations = np.concatenate([describe_ops(t) for t in tensors])
+            _transforms = self.get_transforms(operations=operations)
+            if isinstance(transforms, list):
+                transforms.extend(_transforms)
+            else:
+                transforms = _transforms
+
+        index = pd.MultiIndex.from_product([self.columns, ['sum', 'sqr_sum',
+                                                           'min', 'max']])
+        result = pd.Series(self.reduce(reduce_ops * len(self.columns),
+                                       transforms=transforms),
+                           index=index)
+        n = float(self.size)
+        for column in self.columns:
+            mean = result[column, 'sum'] / n
+            std = np.sqrt((result[column, 'sqr_sum'] - n * mean * mean) / n)
+            result[column, 'mean'] = mean
+            result[column, 'std'] = std
+            result[column, 'count'] = n
+        return result.sortlevel(level=0, sort_remaining=False)
+
     def _reduce_wrapper(self, reduce_op, **kwargs):
         result = self.reduce(reduce_op, **kwargs)
         if kwargs.get('operations', None) is None:
