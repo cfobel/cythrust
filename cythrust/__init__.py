@@ -198,7 +198,8 @@ class Context(_Context):
         self.kwargs = {'pyx_kwargs': {'cplus': True},
                        'include_dirs': include_dirs + get_includes()}
         if self.device_system in ('THRUST_DEVICE_SYSTEM_CPP',
-                                  'THRUST_DEVICE_SYSTEM_TBB'):
+                                  'THRUST_DEVICE_SYSTEM_TBB',
+                                  'THRUST_DEVICE_SYSTEM_OMP'):
             self.kwargs.update({'define_macros': [('THRUST_DEVICE_SYSTEM',
                                                    device_system)],
                                 'extra_compile_args': ['-O3']})
@@ -206,6 +207,9 @@ class Context(_Context):
             self.kwargs['preargs'] = ['-O3', '-D' + self.device_system]
         if self.device_system == 'THRUST_DEVICE_SYSTEM_TBB':
             self.kwargs['extra_link_args'] = ['-ltbb']
+        elif self.device_system == 'THRUST_DEVICE_SYSTEM_OMP':
+            self.kwargs['extra_compile_args'] += ['-fopenmp']
+            self.kwargs['extra_link_args'] = ['-fopenmp']
 
     @property
     def include_dirs(self):
