@@ -759,6 +759,15 @@ class DeviceViewGroup(object):
             mean = result[column, 'sum'] / n
             sum_ = result[column, 'sum']
             sqr_sum = result[column, 'sqr_sum']
+
+            # Compute standard deviation.
+            #
+            #  - Compute *sum of squares* using shortcut described [here][1].
+            #  - Compute *standard deviation* using sum of squares, as
+            #    described [here][2].
+            #
+            # [1]: https://people.richland.edu/james/lecture/m170/ch03-var.html
+            # [2]: https://www.westgard.com/lesson35.htm#5
             std = np.sqrt((sqr_sum - (sum_ * sum_) / float(n)) / (n - 1))
             result[column, 'mean'] = mean
             result[column, 'std'] = std
