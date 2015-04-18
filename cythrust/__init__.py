@@ -15,7 +15,8 @@ try:
 except:
     pass
 from .template import (SORT_TEMPLATE, BASE_TEMPLATE, REDUCE_TEMPLATE,
-                       COUNT_TEMPLATE)
+                       COUNT_TEMPLATE, TRANSFORM_SETUP_TEMPLATE,
+                       TRANSFORM_TEMPLATE)
 
 
 NP_TYPE_TO_CTYPE = OrderedDict([('int8', 'int8_t'),
@@ -326,6 +327,7 @@ class DeviceViewGroup(object):
     Note that a `DeviceViewGroup` does *not necessarily* own the underlying
     device vectors.
     '''
+    TRANSFORM_CACHE = {}
 
     @classmethod
     def from_device_vectors(self, device_vectors):
@@ -545,12 +547,72 @@ class DeviceViewGroup(object):
                             for k, v in self._view_dict.iteritems()])
 
     @property
+    def size(self):
+        sizes = self.sizes.values()
+        assert(min(sizes) == max(sizes))
+        return sizes
+
+    @property
     def vector_sizes(self):
         return OrderedDict([(k, d.size)
                             for k, d in self._data_dict.iteritems()])
 
     def groupby(self, key_columns, sort=True):
         return GroupBy(self, key_columns)
+
+    def transform(self, transform_dict, out=None):
+        '''
+        Return result from applying specified transforms.
+
+        Use `TRANSFORM_CACHE` to reuse previously compiled functions for the
+        same dictionary transforms.
+        '''
+        out, group, foo = self.get_transform_function(transform_dict, out)
+        foo(*group._view_dict.values())
+        return out
+
+    def get_transform_function(self, transform_dict, out):
+        transform_tuple = tuple(transform_dict.items())
+
+        if out is None or transform_tuple not in self.TRANSFORM_CACHE:
+            transforms = OrderedDict([
+                (k, self._context.build_transform(v, '%s%s' % (k, hash(v))))
+                for k, v in transform_dict.iteritems()])
+
+        if out is None:
+            out = DeviceDataFrame(OrderedDict([
+                (k, np.zeros(self.size, dtype=t.thrust_code.output_nodes
+                             .sort_index().iloc[-1].dtype))
+                for k, t in transforms.iteritems()]),
+                context=self._context)
+
+        group = join(self, out)
+
+        if transform_tuple in self.TRANSFORM_CACHE:
+            foo = self.TRANSFORM_CACHE[transform_tuple]
+        else:
+            setup = (jinja2.Template(TRANSFORM_SETUP_TEMPLATE)
+                    .render(transforms=transforms.values(),
+                            out_views=transforms.keys()))
+            code = jinja2.Template(TRANSFORM_TEMPLATE).render(transforms=transforms.values(),
+                                                            out_views=transforms.keys())
+
+            try:
+                foo = group.inline_func(group._view_dict.keys(),
+                    setup=setup,
+                    include_dirs=
+                    np.concatenate([t.get_includes()
+                                    for t in transforms.values()]).tolist(),
+                    code=code)
+            except:
+                print 50 * '='
+                print setup
+                print 50 * '-'
+                print code
+                print 50 * '='
+                raise
+            self.TRANSFORM_CACHE[transform_tuple] = foo
+        return out, group, foo
 
 
 class DeviceVectorCollection(DeviceViewGroup):
@@ -644,6 +706,9 @@ class DeviceDataFrame(DeviceVectorCollection):
         if isinstance(data, dict):
             assert(len(set([v.size for v in data.itervalues()])) == 1)
         super(DeviceDataFrame, self).__init__(data, context)
+
+    def copy(self):
+        return DeviceDataFrame(self.as_arrays(), context=self._context)
 
     def add(self, column_name, column_data=None, dtype=None):
         if dtype is None and column_data is None:
@@ -846,7 +911,7 @@ class GroupBy(object):
                   np.zeros(view.size, dtype=view.dtype))
                  for column, view in self.value_views.v.iteritems()
                  for op in reduce_op])
-            out = DeviceDataFrame(out_vectors)
+            out = DeviceDataFrame(out_vectors, context=self.views._context)
         elif bounds_check:
             # Check to make sure that the views are large enough.
             if hasattr(out, 'vector_size'):
@@ -886,8 +951,8 @@ class GroupBy(object):
             out_vectors = OrderedDict(
                 [(column, np.zeros(view.size, dtype=view.dtype))
                  for column, view in self.key_views.v.iteritems()] +
-                [('count', np.zeros(self.views.size, dtype='uint32'))])
-            out = DeviceDataFrame(out_vectors)
+                [('count', np.zeros(self.key_views.size, dtype='uint32'))])
+            out = DeviceDataFrame(out_vectors, context=self.views._context)
         elif bounds_check:
             # Check to make sure that the views are large enough.
             if hasattr(out, 'vector_size'):
@@ -989,3 +1054,12 @@ def get_count_func(context, key_modules, key_dtypes, value_out_modules,
         raise
     exec('from %s import count_by_key_func as __count_func__' % module_name)
     return __count_func__
+
+
+def join(left_group, right_group):
+    group = DeviceViewGroup()
+    assert(left_group._context == right_group._context)
+    group._context = left_group._context
+    group._view_dict = OrderedDict(left_group.v.items() +
+                                   right_group.v.items())
+    return group

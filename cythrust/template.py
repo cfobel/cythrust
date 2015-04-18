@@ -490,3 +490,51 @@ def count_by_key_func(
                                         keys_o_begin)
     return N
 '''
+
+TRANSFORM_SETUP_TEMPLATE = '''
+{% for t in transforms %}
+from {{ t.functor_name }}.{{ t.functor_name }} cimport {{ t.functor_name }}
+{% endfor %}
+from cythrust.thrust.iterator.zip_iterator cimport make_zip_iterator, zip_iterator
+from cythrust.thrust.tuple cimport (make_tuple2, make_tuple3, make_tuple4,
+                                    make_tuple5, make_tuple6, make_tuple7,
+                                    tuple2, tuple3, tuple4,
+                                    tuple5, tuple6, tuple7)
+from cythrust.thrust.copy cimport copy_n
+
+ctypedef {% if transforms|length > 1 %}tuple{{ transforms|length }}[{% endif %}
+{%- for t in transforms -%}
+{{ t.functor_name }}.iterator
+{%- if not loop.last %}, {% endif -%}
+{% endfor -%}
+{% if transforms|length > 1 %}]{% endif %} input_tuple
+ctypedef zip_iterator[input_tuple] input_iterator
+'''
+
+TRANSFORM_TEMPLATE = '''
+{% for t in transforms %}
+    cdef {{ t.functor_name }} *op{{ loop.index }} = new {{ t.functor_name }}(
+    {%- for column in t.thrust_code.graph_inputs -%}
+    <{{ t.functor_name }}.{{ column }}_t>{{ column }}._begin
+    {%- if not loop.last %}, {% endif -%}
+    {% endfor %})
+{% endfor %}
+
+    cdef size_t N = {{ out_views[0] }}._end - {{ out_views[0] }}._begin
+
+    copy_n(
+    {% if transforms|length > 1 %}make_zip_iterator(make_tuple{{ transforms|length }}({% endif %}
+{%- for t in transforms -%}
+    op{{ loop.index }}.begin()
+{%- if not loop.last %}, {% endif -%}
+{% endfor -%}
+{% if transforms|length > 1 %})){% endif %},
+    N,
+    {% if out_views|length > 1 %}make_zip_iterator(make_tuple{{ out_views|length }}({% endif %}
+{%- for v in out_views -%}
+    {{ v }}._begin
+{%- if not loop.last %}, {% endif -%}
+{% endfor -%}
+{% if out_views|length > 1 %})){% endif %})
+    return N
+'''
