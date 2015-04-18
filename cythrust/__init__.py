@@ -737,19 +737,26 @@ class DeviceViewGroup(object):
         else:
             return result
 
-    def reduce(self, reduce_ops=None, operations=None, transforms=None,
-               init_values=None, size=None):
-        def get_transforms(operations):
-            if operations is None:
-                tensors = self.tensor(self.columns)
-                operations = [t.take(T.arange(0)) for t in tensors]
-            return [self._context.build_transform(t, 'reduce%s' % hash(t))
-                    for t in operations]
+    def get_transforms(self, columns=None, operations=None):
+        if operations is None:
+            if columns is None:
+                columns = self.columns
+            tensors = self.tensor(columns)
 
+            # Create identity operation for each column, which iterate over the
+            # values of the corresponding column.
+            # TODO: Fix support for bare column tensors.  This may require
+            # changes to `theano_helpers`.
+            operations = [t.take(T.arange((1 << 32) - 1)) for t in tensors]
+        return [self._context.build_transform(t, 'reduce%s' % hash(t))
+                for t in operations]
+
+    def reduce(self, reduce_ops=None, operations=None, transforms=None,
+               init_values=None, size=None, **kwargs):
         if transforms is None:
-            transforms = get_transforms(operations)
+            transforms = self.get_transforms(operations=operations)
         elif isinstance(transforms, list) and not transforms:
-            transforms.extend(get_transforms(operations))
+            transforms.extend(self.get_transforms(operations=operations))
 
         if isinstance(reduce_ops, str):
             reduce_ops = [reduce_ops] * len(transforms)
@@ -761,7 +768,24 @@ class DeviceViewGroup(object):
                            if not callable(TRANSFORM_IDENTITIES[k])
                            else TRANSFORM_IDENTITIES[k](transforms[i])
                            for i, k in enumerate(reduce_ops)]
+        if size is None:
+            size = self.size
 
+        # Cast arguments as tuples since cached `get_reduce_func` function
+        # requires *hashable* arguments.
+        reduce_func = self.get_reduce_func(tuple(reduce_ops),
+                                           tuple(transforms),
+                                           tuple(init_values), **kwargs)
+
+        return reduce_func(size, *self.v.values())
+
+    @functools32.lru_cache()
+    def get_reduce_func(self, reduce_ops, transforms, init_values, **kwargs):
+        '''
+        __NB__ `reduce_ops`, `transforms`, and `init_values` must all be
+        *hashable* types.  This is a requirement for using
+        `functools32.lru_cache`.
+        '''
         setup = (jinja2.Template(REDUCE_SETUP_TEMPLATE)
                 .render(transforms=transforms,
                         reduce_ops=reduce_ops,
@@ -777,12 +801,9 @@ class DeviceViewGroup(object):
         include_dirs = np.concatenate([t.get_includes()
                                        for t in transforms]).tolist()
 
-        reduce_func = self.inline_func(self.columns, include_dirs=include_dirs,
-                                       setup=setup, code=code,  # verbose=True,
-                                       context=dict(preargs='size_t N, '))
-        if size is None:
-            size = self.size
-        return reduce_func(size, *self.v.values())
+        return self.inline_func(self.columns, include_dirs=include_dirs,
+                                setup=setup, code=code,
+                                context=dict(preargs='size_t N, '), **kwargs)
 
 
 class DeviceVectorCollection(DeviceViewGroup):
